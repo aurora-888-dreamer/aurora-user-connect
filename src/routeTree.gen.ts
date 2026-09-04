@@ -11,6 +11,7 @@
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AtsRouteImport } from './routes/ats'
+import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DirectoryRouteImport } from './routes/directory'
 import { Route as HrisRouteImport } from './routes/hris'
 
@@ -22,6 +23,11 @@ const IndexRoute = IndexRouteImport.update({
 const AtsRoute = AtsRouteImport.update({
   id: '/ats',
   path: '/ats',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DashboardRoute = DashboardRouteImport.update({
+  id: '/dashboard',
+  path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
 const DirectoryRoute = DirectoryRouteImport.update({
@@ -38,12 +44,14 @@ const HrisRoute = HrisRouteImport.update({
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ats': typeof AtsRoute
+  '/dashboard': typeof DashboardRoute
   '/directory': typeof DirectoryRoute
   '/hris': typeof HrisRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ats': typeof AtsRoute
+  '/dashboard': typeof DashboardRoute
   '/directory': typeof DirectoryRoute
   '/hris': typeof HrisRoute
 }
@@ -51,20 +59,22 @@ export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
   '/ats': typeof AtsRoute
+  '/dashboard': typeof DashboardRoute
   '/directory': typeof DirectoryRoute
   '/hris': typeof HrisRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/ats' | '/directory' | '/hris'
+  fullPaths: '/' | '/ats' | '/dashboard' | '/directory' | '/hris'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/ats' | '/directory' | '/hris'
-  id: '__root__' | '/' | '/ats' | '/directory' | '/hris'
+  to: '/' | '/ats' | '/dashboard' | '/directory' | '/hris'
+  id: '__root__' | '/' | '/ats' | '/dashboard' | '/directory' | '/hris'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AtsRoute: typeof AtsRoute
+  DashboardRoute: typeof DashboardRoute
   DirectoryRoute: typeof DirectoryRoute
   HrisRoute: typeof HrisRoute
 }
@@ -83,6 +93,13 @@ declare module '@tanstack/react-router' {
       path: '/ats'
       fullPath: '/ats'
       preLoaderRoute: typeof AtsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/dashboard': {
+      id: '/dashboard'
+      path: '/dashboard'
+      fullPath: '/dashboard'
+      preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/directory': {
@@ -105,6 +122,7 @@ declare module '@tanstack/react-router' {
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AtsRoute: AtsRoute,
+  DashboardRoute: DashboardRoute,
   DirectoryRoute: DirectoryRoute,
   HrisRoute: HrisRoute,
 }
