@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { getActiveSession } from "@/lib/aurora-id";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -59,13 +60,22 @@ export const Route = createFileRoute("/ats")({
 });
 
 function AtsPage() {
+  const navigate = useNavigate();
+  const [ready, setReady] = useState(false);
   const [vacancies, setVacancies] = useState<JobVacancy[]>([]);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
 
   useEffect(() => {
+    if (!getActiveSession()) {
+      navigate({ to: "/" });
+      return;
+    }
+    setReady(true);
     setVacancies(getVacancies());
     setApplicants(getApplicants());
-  }, []);
+  }, [navigate]);
+
+  if (!ready) return null;
 
   const refresh = () => {
     setVacancies(getVacancies());

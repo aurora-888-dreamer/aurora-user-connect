@@ -1,6 +1,7 @@
-import { createFileRoute } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { getActiveSession } from "@/lib/aurora-id";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -65,14 +66,23 @@ const PTKP_STATUSES: PtkpStatus[] = ["TK/0", "TK/1", "TK/2", "TK/3", "K/0", "K/1
 const rupiah = (n: number) => `Rp ${Math.round(n).toLocaleString("id-ID")}`;
 
 function HrisPage() {
+  const navigate = useNavigate();
+  const [ready, setReady] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [attendance, setAttendance] = useState(() => getAttendance());
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
 
   useEffect(() => {
+    if (!getActiveSession()) {
+      navigate({ to: "/" });
+      return;
+    }
+    setReady(true);
     setEmployees(getEmployees());
     setPayrolls(getPayrolls());
-  }, []);
+  }, [navigate]);
+
+  if (!ready) return null;
 
   const refresh = () => {
     setEmployees(getEmployees());
