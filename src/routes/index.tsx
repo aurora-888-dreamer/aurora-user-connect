@@ -1,36 +1,44 @@
 // src/routes/index.tsx
-import { createFileRoute, useNavigate } from '@tanstack/react-router';
-import { useState } from 'react';
-import { getStoredUsers, setActiveSession } from '@/lib/aurora-id';
-import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { InputOTP, InputOTPGroup, InputOTPSlot } from '@/components/ui/input-otp';
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
+import { getActiveSession, getStoredUsers, setActiveSession } from "@/lib/aurora-id";
+import { Button } from "@/components/ui/button";
+import { Input } from "@/components/ui/input";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
-export const Route = createFileRoute('/')({
+export const Route = createFileRoute("/")({
   component: LoginComponent,
 });
 
 function LoginComponent() {
   const navigate = useNavigate();
-  const [userId, setUserId] = useState('');
-  const [pin, setPin] = useState('');
-  const [error, setError] = useState('');
+  const [userId, setUserId] = useState("");
+  const [pin, setPin] = useState("");
+  const [error, setError] = useState("");
+
+  // Already logged in on this device/session — skip the login form and go
+  // straight to the Dashboard instead of showing it again.
+  useEffect(() => {
+    if (getActiveSession()) {
+      navigate({ to: "/dashboard" });
+    }
+  }, [navigate]);
 
   const handleLogin = (e: React.FormEvent) => {
     e.preventDefault();
-    setError('');
+    setError("");
 
     const users = getStoredUsers();
     const user = users.find(
-      (u) => u.userId.toUpperCase() === userId.trim().toUpperCase() && u.pin === pin
+      (u) => u.userId.toUpperCase() === userId.trim().toUpperCase() && u.pin === pin,
     );
 
     if (user) {
       setActiveSession(user);
-      navigate({ to: '/dashboard' });
+      navigate({ to: "/dashboard" });
     } else {
-      setError('User ID atau PIN 6 digit salah!');
+      setError("User ID atau PIN 6 digit salah!");
     }
   };
 
@@ -43,7 +51,11 @@ function LoginComponent() {
         </CardHeader>
         <CardContent>
           <form onSubmit={handleLogin} className="space-y-4">
-            {error && <div className="rounded bg-red-500/10 p-2 text-center text-sm text-red-400">{error}</div>}
+            {error && (
+              <div className="rounded bg-red-500/10 p-2 text-center text-sm text-red-400">
+                {error}
+              </div>
+            )}
             <div>
               <label className="mb-1 block text-sm font-medium">User ID</label>
               <Input
