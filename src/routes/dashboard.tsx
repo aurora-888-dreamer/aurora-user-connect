@@ -1,10 +1,10 @@
 // src/routes/dashboard.tsx
 import { createFileRoute, useNavigate } from '@tanstack/react-router';
 import { useState, useEffect } from 'react';
-import { getActiveSession, setActiveSession, getStoredUsers, saveUsers, UserProfile, UserRole } from '~/lib/aurora-id';
-import { Button } from '~/components/ui/button';
-import { Input } from '~/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle } from '~/components/ui/card';
+import { getActiveSession, setActiveSession, getStoredUsers, saveUsers, UserProfile, UserRole } from '@/lib/aurora-id';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 
 export const Route = createFileRoute('/dashboard')({
   component: DashboardComponent,
