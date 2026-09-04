@@ -1,15 +1,10 @@
-import { Link } from "@tanstack/react-router";
-import {
-  Fingerprint,
-  Users,
-  Briefcase,
-  Database,
-  ShieldCheck,
-} from "lucide-react";
+import { Link, useNavigate } from "@tanstack/react-router";
+import { LayoutDashboard, Users, Briefcase, Database, LogOut } from "lucide-react";
 import type { ReactNode } from "react";
+import { getActiveSession, setActiveSession } from "@/lib/aurora-id";
 
 const tools = [
-  { to: "/", label: "Identity Vault", icon: Fingerprint },
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/hris", label: "Core HRIS", icon: Users },
   { to: "/ats", label: "ATS Recruitment", icon: Briefcase },
   { to: "/directory", label: "User ID Directory", icon: Database },
@@ -24,6 +19,14 @@ export function AppShell({
   description: string;
   children: ReactNode;
 }) {
+  const navigate = useNavigate();
+  const session = getActiveSession();
+
+  const handleLogout = () => {
+    setActiveSession(null);
+    navigate({ to: "/" });
+  };
+
   return (
     <div className="flex min-h-screen">
       <aside className="sticky top-0 hidden h-screen w-72 shrink-0 flex-col border-r border-sidebar-border bg-sidebar px-5 py-7 backdrop-blur-xl md:flex">
@@ -44,7 +47,6 @@ export function AppShell({
             <Link
               key={to}
               to={to}
-              activeOptions={{ exact: to === "/" }}
               className="flex items-center gap-3 rounded-xl px-3 py-2.5 text-sm text-sidebar-foreground/75 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
               activeProps={{
                 className:
@@ -57,13 +59,21 @@ export function AppShell({
           ))}
         </nav>
 
-        <div className="rounded-xl border border-sidebar-border p-3 text-xs text-muted-foreground">
-          <div className="flex items-center gap-2 text-sidebar-primary">
-            <ShieldCheck className="size-4" />
-            <span className="font-semibold">Aurora Centre</span>
+        {session && (
+          <div className="rounded-xl border border-sidebar-border p-3 text-xs">
+            <p className="font-semibold text-sidebar-foreground">{session.fullName}</p>
+            <p className="mt-0.5 font-mono text-muted-foreground">
+              {session.userId} · {session.role}
+            </p>
+            <button
+              onClick={handleLogout}
+              className="mt-3 flex w-full items-center justify-center gap-1.5 rounded-lg border border-sidebar-border px-2 py-1.5 text-muted-foreground transition-colors hover:border-destructive/50 hover:text-destructive"
+            >
+              <LogOut className="size-3.5" />
+              Keluar
+            </button>
           </div>
-          <p className="mt-1.5 leading-relaxed">magic-noble-nexus.lovable.app</p>
-        </div>
+        )}
         <p className="mt-4 text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">
           Designed by Aurora Master
         </p>
@@ -81,13 +91,20 @@ export function AppShell({
                 <Link
                   key={to}
                   to={to}
-                  activeOptions={{ exact: to === "/" }}
                   className="whitespace-nowrap rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground"
                   activeProps={{ className: "border-primary/60 text-primary" }}
                 >
                   {label}
                 </Link>
               ))}
+              {session && (
+                <button
+                  onClick={handleLogout}
+                  className="whitespace-nowrap rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground"
+                >
+                  Keluar
+                </button>
+              )}
             </nav>
           </header>
 
