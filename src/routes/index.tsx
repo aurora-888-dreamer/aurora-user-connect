@@ -47,7 +47,7 @@ function LoginComponent() {
             <div>
               <label className="mb-1 block text-sm font-medium">User ID</label>
               <Input
-                placeholder="Contoh: AUROR61710"
+                placeholder="Contoh: AUROR62710"
                 value={userId}
                 onChange={(e) => setUserId(e.target.value)}
                 required
