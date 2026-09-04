@@ -100,12 +100,24 @@ function IdentityVault() {
     }
   }, [collision, fullName, dial, phone, registry]);
 
-  async function handleRegister() {
+  async function handleRegister(): Promise<void> {
     const nikDigits = digitsOnly(nik);
-    if (fullName.trim().length < 3) return toast.error("Enter your full name.");
-    if (digitsOnly(phone).length < 7) return toast.error("Enter a valid WA/HP number.");
-    if (nikDigits.length !== 16) return toast.error("NIK must be 16 digits (one fill only).");
-    if (collision && !chosen) return toast.error("Choose one of the 3 suggested user_id.");
+    if (fullName.trim().length < 3) {
+      toast.error("Enter your full name.");
+      return;
+    }
+    if (digitsOnly(phone).length < 7) {
+      toast.error("Enter a valid WA/HP number.");
+      return;
+    }
+    if (nikDigits.length !== 16) {
+      toast.error("NIK must be 16 digits (one fill only).");
+      return;
+    }
+    if (collision && !chosen) {
+      toast.error("Choose one of the 3 suggested user_id.");
+      return;
+    }
 
     setBusy(true);
     const userId = collision ? chosen! : preview;

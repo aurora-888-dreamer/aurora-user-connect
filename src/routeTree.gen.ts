@@ -10,33 +10,63 @@
 
 import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
+import { Route as AtsRouteImport } from './routes/ats'
+import { Route as DirectoryRouteImport } from './routes/directory'
+import { Route as HrisRouteImport } from './routes/hris'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
   path: '/',
   getParentRoute: () => rootRouteImport,
 } as any)
+const AtsRoute = AtsRouteImport.update({
+  id: '/ats',
+  path: '/ats',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const DirectoryRoute = DirectoryRouteImport.update({
+  id: '/directory',
+  path: '/directory',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const HrisRoute = HrisRouteImport.update({
+  id: '/hris',
+  path: '/hris',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
+  '/ats': typeof AtsRoute
+  '/directory': typeof DirectoryRoute
+  '/hris': typeof HrisRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
+  '/ats': typeof AtsRoute
+  '/directory': typeof DirectoryRoute
+  '/hris': typeof HrisRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
   '/': typeof IndexRoute
+  '/ats': typeof AtsRoute
+  '/directory': typeof DirectoryRoute
+  '/hris': typeof HrisRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/'
+  fullPaths: '/' | '/ats' | '/directory' | '/hris'
   fileRoutesByTo: FileRoutesByTo
-  to: '/'
-  id: '__root__' | '/'
+  to: '/' | '/ats' | '/directory' | '/hris'
+  id: '__root__' | '/' | '/ats' | '/directory' | '/hris'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
+  AtsRoute: typeof AtsRoute
+  DirectoryRoute: typeof DirectoryRoute
+  HrisRoute: typeof HrisRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -48,11 +78,35 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof IndexRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/ats': {
+      id: '/ats'
+      path: '/ats'
+      fullPath: '/ats'
+      preLoaderRoute: typeof AtsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/directory': {
+      id: '/directory'
+      path: '/directory'
+      fullPath: '/directory'
+      preLoaderRoute: typeof DirectoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/hris': {
+      id: '/hris'
+      path: '/hris'
+      fullPath: '/hris'
+      preLoaderRoute: typeof HrisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
 const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
+  AtsRoute: AtsRoute,
+  DirectoryRoute: DirectoryRoute,
+  HrisRoute: HrisRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
