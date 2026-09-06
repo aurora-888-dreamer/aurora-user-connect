@@ -1,4 +1,4 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -25,9 +25,16 @@ import {
   getCompanyProfile,
   isOfficeLocationSet,
   distanceMeters,
-  OFFICE_RADIUS_METERS,
+  DEFAULT_OFFICE_RADIUS_METERS,
+  type CompanyProfile,
 } from "@/lib/company-data";
-import { clockIn, clockOut, todayRecordFor, type Employee } from "@/lib/hris-data";
+import {
+  clockIn,
+  clockOut,
+  todayRecordFor,
+  type Employee,
+  type AttendanceRecord,
+} from "@/lib/hris-data";
 
 export function AttendanceFlow({
   employee,
@@ -41,6 +48,9 @@ export function AttendanceFlow({
   const [outsideConfirmed, setOutsideConfirmed] = useState(false);
   const [outsideNote, setOutsideNote] = useState("");
   const [outsideTask, setOutsideTask] = useState("");
+  const [company, setCompany] = useState<CompanyProfile | null>(null);
+  const [record, setRecord] = useState<AttendanceRecord | null>(null);
+  const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{
     coords?: { lat: string; long: string };
     distanceMeters?: number;
@@ -49,9 +59,24 @@ export function AttendanceFlow({
     outsideTaskStatus?: string;
   }>({});
 
-  const record = employee ? todayRecordFor(employee.id) : null;
-  const company = getCompanyProfile();
-  const officeConfigured = isOfficeLocationSet(company);
+  useEffect(() => {
+    getCompanyProfile()
+      .then(setCompany)
+      .catch(() => toast.error("Gagal memuat pengaturan kantor."));
+  }, []);
+
+  useEffect(() => {
+    if (!employee) {
+      setRecord(null);
+      return;
+    }
+    todayRecordFor(employee.id)
+      .then(setRecord)
+      .catch(() => setRecord(null));
+  }, [employee]);
+
+  const officeRadiusMeters = company?.officeRadiusMeters ?? DEFAULT_OFFICE_RADIUS_METERS;
+  const officeConfigured = company ? isOfficeLocationSet(company) : false;
 
   const resetFlow = () => {
     setDialog(null);
@@ -71,7 +96,7 @@ export function AttendanceFlow({
   };
 
   const handleClockIn = () => {
-    if (!employee) return;
+    if (!employee || !company) return;
     if (!navigator.geolocation) {
       proceedAfterGps({});
       return;
@@ -88,7 +113,7 @@ export function AttendanceFlow({
             company.officeLat!,
             company.officeLng!,
           );
-          if (dist > OFFICE_RADIUS_METERS) {
+          if (dist > officeRadiusMeters) {
             setPending({ coords, distanceMeters: dist, isOutsideOffice: true });
             setDialog("outside");
             return;
@@ -106,11 +131,18 @@ export function AttendanceFlow({
     );
   };
 
-  const handleClockOut = () => {
+  const handleClockOut = async () => {
     if (!employee) return;
-    clockOut(employee.id);
-    toast.success("Clock-out tercatat.");
-    onChange();
+    setBusy(true);
+    try {
+      await clockOut(employee.id);
+      toast.success("Clock-out tercatat.");
+      onChange();
+    } catch {
+      toast.error("Gagal mencatat clock-out. Coba lagi.");
+    } finally {
+      setBusy(false);
+    }
   };
 
   if (!employee) {
@@ -119,11 +151,11 @@ export function AttendanceFlow({
 
   return (
     <div>
-      {!officeConfigured && (
+      {company && !officeConfigured && (
         <p className="mb-3 flex items-center gap-1.5 text-xs text-amber-500">
           <AlertTriangle className="size-3.5" />
           Titik lokasi kantor belum diatur — buka menu <strong>Pengaturan</strong> agar validasi
-          radius {OFFICE_RADIUS_METERS}m bisa aktif.
+          radius {officeRadiusMeters}m bisa aktif.
         </p>
       )}
       {!employee.faceDescriptor && (
@@ -134,12 +166,15 @@ export function AttendanceFlow({
       )}
 
       <div className="flex flex-wrap gap-3">
-        <Button onClick={handleClockIn} disabled={!!record?.clockIn || gpsLoading}>
+        <Button
+          onClick={handleClockIn}
+          disabled={!!record?.clockIn || gpsLoading || !company || busy}
+        >
           <LogIn className="size-4" /> {gpsLoading ? "Mengambil lokasi…" : "Clock In"}
         </Button>
         <Button
           onClick={handleClockOut}
-          disabled={!record?.clockIn || !!record?.clockOut}
+          disabled={!record?.clockIn || !!record?.clockOut || busy}
           variant="secondary"
         >
           <LogOut className="size-4" /> Clock Out
@@ -187,7 +222,7 @@ export function AttendanceFlow({
             </DialogTitle>
             <DialogDescription>
               Jarak Anda sekitar <strong>{pending.distanceMeters?.toFixed(0)} meter</strong> dari
-              titik kantor (radius yang diizinkan {OFFICE_RADIUS_METERS}m). Apakah Anda tetap ingin
+              titik kantor (radius yang diizinkan {officeRadiusMeters}m). Apakah Anda tetap ingin
               melakukan absensi?
             </DialogDescription>
           </DialogHeader>
@@ -268,25 +303,29 @@ export function AttendanceFlow({
           employeeName={employee.fullName}
           enrolledDescriptor={employee.faceDescriptor}
           onClose={resetFlow}
-          onVerified={(result) => {
+          onVerified={async (result) => {
             if (result.matched) {
-              clockIn(employee.id, {
-                ...(pending.coords ? { coords: pending.coords } : {}),
-                ...(pending.distanceMeters !== undefined
-                  ? { distanceMeters: pending.distanceMeters }
-                  : {}),
-                ...(pending.isOutsideOffice !== undefined
-                  ? { isOutsideOffice: pending.isOutsideOffice }
-                  : {}),
-                ...(pending.outsideLocationNote
-                  ? { outsideLocationNote: pending.outsideLocationNote }
-                  : {}),
-                ...(pending.outsideTaskStatus
-                  ? { outsideTaskStatus: pending.outsideTaskStatus }
-                  : {}),
-                photoDataUrl: result.photoDataUrl,
-              });
-              toast.success("Absensi berhasil — wajah terverifikasi.");
+              try {
+                await clockIn(employee.id, {
+                  ...(pending.coords ? { coords: pending.coords } : {}),
+                  ...(pending.distanceMeters !== undefined
+                    ? { distanceMeters: pending.distanceMeters }
+                    : {}),
+                  ...(pending.isOutsideOffice !== undefined
+                    ? { isOutsideOffice: pending.isOutsideOffice }
+                    : {}),
+                  ...(pending.outsideLocationNote
+                    ? { outsideLocationNote: pending.outsideLocationNote }
+                    : {}),
+                  ...(pending.outsideTaskStatus
+                    ? { outsideTaskStatus: pending.outsideTaskStatus }
+                    : {}),
+                  photoDataUrl: result.photoDataUrl,
+                });
+                toast.success("Absensi berhasil — wajah terverifikasi.");
+              } catch {
+                toast.error("Gagal menyimpan absensi. Coba lagi.");
+              }
             } else {
               toast.error(
                 `Wajah tidak cocok (jarak ${result.distance.toFixed(2)}). Absensi ditolak.`,

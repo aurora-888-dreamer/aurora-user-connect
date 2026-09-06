@@ -8,11 +8,13 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Camera, ScanFace } from "lucide-react";
+import { Loader2, Camera, ScanFace, Upload } from "lucide-react";
 import {
   captureFaceDescriptor,
   descriptorDistance,
   loadFaceModels,
+  loadImageFile,
+  imageToDataUrl,
   snapshotToDataUrl,
   FACE_MATCH_THRESHOLD,
 } from "@/lib/face-recognition";
@@ -45,6 +47,7 @@ type Props =
 export function FaceCaptureDialog(props: Props) {
   const { open, mode, employeeName, onClose } = props;
   const videoRef = useRef<HTMLVideoElement>(null);
+  const fileInputRef = useRef<HTMLInputElement>(null);
   const streamRef = useRef<MediaStream | null>(null);
   const [modelsReady, setModelsReady] = useState(false);
   const [cameraError, setCameraError] = useState<string | null>(null);
@@ -65,13 +68,27 @@ export function FaceCaptureDialog(props: Props) {
         streamRef.current = stream;
         if (videoRef.current) videoRef.current.srcObject = stream;
       })
-      .catch(() => setCameraError("Tidak bisa mengakses kamera. Izinkan akses kamera di browser."));
+      .catch(() =>
+        setCameraError(
+          'Tidak bisa mengakses kamera. Izinkan akses kamera di browser, atau gunakan tombol "Unggah Foto" di bawah.',
+        ),
+      );
 
     return () => {
       streamRef.current?.getTracks().forEach((t) => t.stop());
       streamRef.current = null;
     };
   }, [open]);
+
+  const finishWithDescriptor = (descriptor: Float32Array, photoDataUrl: string) => {
+    if (mode === "enroll") {
+      props.onEnrolled({ descriptor: Array.from(descriptor), photoDataUrl });
+      return;
+    }
+    const distance = descriptorDistance(props.enrolledDescriptor, descriptor);
+    const matched = distance < FACE_MATCH_THRESHOLD;
+    props.onVerified({ matched, distance, descriptor: Array.from(descriptor), photoDataUrl });
+  };
 
   const handleCapture = async () => {
     if (!videoRef.current) return;
@@ -85,15 +102,30 @@ export function FaceCaptureDialog(props: Props) {
         return;
       }
       const photoDataUrl = snapshotToDataUrl(videoRef.current);
+      finishWithDescriptor(descriptor, photoDataUrl);
+    } finally {
+      setBusy(false);
+    }
+  };
 
-      if (mode === "enroll") {
-        props.onEnrolled({ descriptor: Array.from(descriptor), photoDataUrl });
+  const handleFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    e.target.value = ""; // allow picking the same file again later
+    if (!file) return;
+    setBusy(true);
+    setNotice(null);
+    try {
+      await loadFaceModels();
+      const image = await loadImageFile(file);
+      const descriptor = await captureFaceDescriptor(image);
+      if (!descriptor) {
+        setNotice("Wajah tidak terdeteksi di foto ini. Coba foto lain yang lebih jelas.");
         return;
       }
-
-      const distance = descriptorDistance(props.enrolledDescriptor, descriptor);
-      const matched = distance < FACE_MATCH_THRESHOLD;
-      props.onVerified({ matched, distance, descriptor: Array.from(descriptor), photoDataUrl });
+      const photoDataUrl = imageToDataUrl(image);
+      finishWithDescriptor(descriptor, photoDataUrl);
+    } catch {
+      setNotice("Gagal memproses foto. Coba foto lain.");
     } finally {
       setBusy(false);
     }
@@ -133,11 +165,30 @@ export function FaceCaptureDialog(props: Props) {
         {cameraError && <p className="text-center text-sm text-destructive">{cameraError}</p>}
         {notice && <p className="text-center text-sm text-amber-500">{notice}</p>}
 
-        <DialogFooter className="sm:justify-center">
+        <DialogFooter className="sm:flex-col sm:items-stretch sm:justify-center sm:gap-2">
           <Button onClick={handleCapture} disabled={!modelsReady || !!cameraError || busy}>
             {busy ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
             Ambil &amp; {mode === "enroll" ? "Daftarkan" : "Verifikasi"}
           </Button>
+          {mode === "enroll" && (
+            <>
+              <Button
+                variant="outline"
+                type="button"
+                disabled={busy}
+                onClick={() => fileInputRef.current?.click()}
+              >
+                <Upload className="size-4" /> Atau Unggah Foto
+              </Button>
+              <input
+                ref={fileInputRef}
+                type="file"
+                accept="image/*"
+                className="hidden"
+                onChange={handleFileChosen}
+              />
+            </>
+          )}
         </DialogFooter>
       </DialogContent>
     </Dialog>
