@@ -112,7 +112,7 @@ export function addApplicant(input: Omit<Applicant, "id" | "createdAt" | "status
  * 1-Click Handover Bridge: POST /api/v1/hris/employees/handover-from-ats
  * equivalent — here, a local draft Employee record in Core HRIS.
  */
-export function updateApplicantStatus(
+export async function updateApplicantStatus(
   id: string,
   status: ApplicantStatus,
   handoverDetails?: {
@@ -120,7 +120,7 @@ export function updateApplicantStatus(
     employmentStatus: EmploymentStatus;
     ptkpStatus: PtkpStatus;
   },
-): { applicant: Applicant; handedOverEmployee: Employee | null } {
+): Promise<{ applicant: Applicant; handedOverEmployee: Employee | null }> {
   const rows = getApplicants();
   const target = rows.find((a) => a.id === id);
   if (!target) throw new Error("Applicant not found");
@@ -129,7 +129,7 @@ export function updateApplicantStatus(
   let handedOverEmployeeId = target.handedOverEmployeeId;
 
   if (status === "HIRED" && !target.handedOverEmployeeId && handoverDetails) {
-    handedOverEmployee = addEmployee({
+    handedOverEmployee = await addEmployee({
       nik: "",
       fullName: target.fullName,
       email: target.email,

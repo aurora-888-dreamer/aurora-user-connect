@@ -1,9 +1,14 @@
 /**
- * Core HRIS data layer (client-side, localStorage-backed).
- * Mirrors the db_core_hris schema from the architecture spec: employees,
- * attendance, payrolls. No server yet — this is the Fase 1 MVP data model,
- * ready to be swapped for real API calls to /api/v1/hris/* later.
+ * Core HRIS data layer.
+ *
+ * Employees + Attendance are MIGRATED from localStorage to Supabase
+ * (`hpm_employees`, `hpm_attendance`) — these are the two pieces staff
+ * attendance depends on directly, so they moved first. Payroll stays
+ * localStorage-backed for now (lower priority — can migrate next).
  */
+import { supabase } from "@/integrations/supabase/client";
+import type { Database } from "@/integrations/supabase/types";
+import { getOrCreateCompanyId } from "@/lib/company-data";
 
 export type EmploymentStatus = "PKWT" | "PKWTT" | "INTERN";
 export type PtkpStatus = "TK/0" | "TK/1" | "TK/2" | "TK/3" | "K/0" | "K/1" | "K/2" | "K/3";
@@ -23,8 +28,9 @@ export type Employee = {
   ptkpStatus: PtkpStatus;
   basicSalary: number;
   isActive: boolean;
-  source?: "MANUAL" | "ATS_HANDOVER";
-  faceDescriptor?: number[];
+  source?: "MANUAL" | "ATS_HANDOVER" | undefined;
+  /** Convenience field only — the real FaceID data lives on the staff account (hpm_staff_users.face_descriptor), not here. Populated by joinFaceDescriptors(). */
+  faceDescriptor?: number[] | undefined;
   createdAt: string;
 };
 
@@ -34,13 +40,13 @@ export type AttendanceRecord = {
   date: string;
   clockIn: string | null;
   clockOut: string | null;
-  latIn?: string;
-  longIn?: string;
-  distanceMeters?: number;
-  isOutsideOffice?: boolean;
-  outsideLocationNote?: string;
-  outsideTaskStatus?: string;
-  photoDataUrl?: string;
+  latIn?: string | undefined;
+  longIn?: string | undefined;
+  distanceMeters?: number | undefined;
+  isOutsideOffice?: boolean | undefined;
+  outsideLocationNote?: string | undefined;
+  outsideTaskStatus?: string | undefined;
+  photoDataUrl?: string | undefined;
   status: AttendanceStatus;
 };
 
@@ -59,8 +65,6 @@ export type Payroll = {
   createdAt: string;
 };
 
-const EMPLOYEES_KEY = "aurora.hpm.employees.v1";
-const ATTENDANCE_KEY = "aurora.hpm.attendance.v1";
 const PAYROLL_KEY = "aurora.hpm.payroll.v1";
 
 function read<T>(key: string): T[] {
@@ -75,46 +79,211 @@ function write<T>(key: string, rows: T[]) {
 
 // ---------- Employees ----------
 
-export function getEmployees(): Employee[] {
-  return read<Employee>(EMPLOYEES_KEY);
-}
+type EmployeeRow = {
+  id: string;
+  nik: string | null;
+  full_name: string;
+  email: string | null;
+  phone: string | null;
+  department: string | null;
+  employment_status: string;
+  join_date: string | null;
+  npwp: string | null;
+  ptkp_status: string | null;
+  basic_salary: number;
+  is_active: boolean;
+  source: string | null;
+  created_at: string;
+};
 
-export function saveEmployees(rows: Employee[]) {
-  write(EMPLOYEES_KEY, rows);
-}
-
-export function addEmployee(input: Omit<Employee, "id" | "createdAt">): Employee {
-  const rows = getEmployees();
-  const employee: Employee = {
-    ...input,
-    id: crypto.randomUUID(),
-    createdAt: new Date().toISOString(),
+function toEmployee(row: EmployeeRow): Employee {
+  return {
+    id: row.id,
+    nik: row.nik ?? "",
+    fullName: row.full_name,
+    email: row.email ?? "",
+    phone: row.phone ?? "",
+    department: row.department ?? "",
+    employmentStatus: (row.employment_status as EmploymentStatus) ?? "PKWT",
+    joinDate: row.join_date ?? "",
+    npwp: row.npwp ?? "",
+    ptkpStatus: (row.ptkp_status as PtkpStatus) ?? "TK/0",
+    basicSalary: row.basic_salary,
+    isActive: row.is_active,
+    source: (row.source as Employee["source"]) ?? "MANUAL",
+    createdAt: row.created_at,
   };
-  saveEmployees([...rows, employee]);
-  return employee;
 }
 
-export function updateEmployee(id: string, patch: Partial<Employee>) {
-  saveEmployees(getEmployees().map((e) => (e.id === id ? { ...e, ...patch } : e)));
+const EMPLOYEE_COLUMNS =
+  "id, nik, full_name, email, phone, department, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, created_at";
+
+export async function getEmployees(): Promise<Employee[]> {
+  const companyId = await getOrCreateCompanyId();
+  const { data, error } = await supabase
+    .from("hpm_employees")
+    .select(EMPLOYEE_COLUMNS)
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: false });
+  if (error) throw error;
+  return (data as EmployeeRow[]).map(toEmployee);
+}
+
+export async function getEmployeeById(id: string): Promise<Employee | null> {
+  const { data, error } = await supabase
+    .from("hpm_employees")
+    .select(EMPLOYEE_COLUMNS)
+    .eq("id", id)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toEmployee(data as EmployeeRow) : null;
+}
+
+/**
+ * FaceID actually lives on `hpm_staff_users.face_descriptor` (one per staff
+ * account, self-enrolled on their own phone). This merges that in wherever
+ * the HRIS admin screens need to show "sudah/belum daftar wajah" per
+ * employee, without changing hpm_employees at all.
+ */
+export async function joinFaceDescriptors(employees: Employee[]): Promise<Employee[]> {
+  if (employees.length === 0) return employees;
+  const { data, error } = await supabase
+    .from("hpm_staff_users")
+    .select("employee_id, face_descriptor")
+    .in(
+      "employee_id",
+      employees.map((e) => e.id),
+    );
+  if (error) throw error;
+  const byEmployeeId = new Map<string, number[]>();
+  for (const row of data ?? []) {
+    if (row.employee_id && Array.isArray(row.face_descriptor)) {
+      byEmployeeId.set(row.employee_id, row.face_descriptor as number[]);
+    }
+  }
+  return employees.map((e) => ({ ...e, faceDescriptor: byEmployeeId.get(e.id) }));
+}
+
+export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Promise<Employee> {
+  const companyId = await getOrCreateCompanyId();
+  const { data, error } = await supabase
+    .from("hpm_employees")
+    .insert({
+      company_id: companyId,
+      nik: input.nik || null,
+      full_name: input.fullName,
+      email: input.email || null,
+      phone: input.phone || null,
+      department: input.department || null,
+      employment_status: input.employmentStatus,
+      join_date: input.joinDate || null,
+      npwp: input.npwp || null,
+      ptkp_status: input.ptkpStatus,
+      basic_salary: input.basicSalary,
+      is_active: input.isActive,
+      source: input.source ?? "MANUAL",
+    })
+    .select(EMPLOYEE_COLUMNS)
+    .single();
+  if (error) throw error;
+  return toEmployee(data as EmployeeRow);
+}
+
+export async function updateEmployee(id: string, patch: Partial<Employee>): Promise<void> {
+  const dbPatch: Database["public"]["Tables"]["hpm_employees"]["Update"] = {};
+  if (patch.nik !== undefined) dbPatch.nik = patch.nik;
+  if (patch.fullName !== undefined) dbPatch.full_name = patch.fullName;
+  if (patch.email !== undefined) dbPatch.email = patch.email;
+  if (patch.phone !== undefined) dbPatch.phone = patch.phone;
+  if (patch.department !== undefined) dbPatch.department = patch.department;
+  if (patch.employmentStatus !== undefined) dbPatch.employment_status = patch.employmentStatus;
+  if (patch.joinDate !== undefined) dbPatch.join_date = patch.joinDate;
+  if (patch.npwp !== undefined) dbPatch.npwp = patch.npwp;
+  if (patch.ptkpStatus !== undefined) dbPatch.ptkp_status = patch.ptkpStatus;
+  if (patch.basicSalary !== undefined) dbPatch.basic_salary = patch.basicSalary;
+  if (patch.isActive !== undefined) dbPatch.is_active = patch.isActive;
+  // Note: patch.faceDescriptor is intentionally ignored here — FaceID is
+  // written to hpm_staff_users via staff-auth.ts's updateStaffAccount, not here.
+  if (Object.keys(dbPatch).length === 0) return;
+  const { error } = await supabase.from("hpm_employees").update(dbPatch).eq("id", id);
+  if (error) throw error;
 }
 
 // ---------- Attendance ----------
 
-export function getAttendance(): AttendanceRecord[] {
-  return read<AttendanceRecord>(ATTENDANCE_KEY);
+type AttendanceRow = {
+  id: string;
+  employee_id: string;
+  date: string;
+  clock_in: string | null;
+  clock_out: string | null;
+  lat_in: string | null;
+  long_in: string | null;
+  distance_meters: number | null;
+  is_outside_office: boolean | null;
+  outside_location_note: string | null;
+  outside_task_status: string | null;
+  photo_url: string | null;
+  status: string | null;
+};
+
+function toAttendance(row: AttendanceRow): AttendanceRecord {
+  return {
+    id: row.id,
+    employeeId: row.employee_id,
+    date: row.date,
+    clockIn: row.clock_in,
+    clockOut: row.clock_out,
+    latIn: row.lat_in ?? undefined,
+    longIn: row.long_in ?? undefined,
+    distanceMeters: row.distance_meters ?? undefined,
+    isOutsideOffice: row.is_outside_office ?? undefined,
+    outsideLocationNote: row.outside_location_note ?? undefined,
+    outsideTaskStatus: row.outside_task_status ?? undefined,
+    photoDataUrl: row.photo_url ?? undefined,
+    status: (row.status as AttendanceStatus) ?? "PRESENT",
+  };
 }
 
-function saveAttendance(rows: AttendanceRecord[]) {
-  write(ATTENDANCE_KEY, rows);
+const ATTENDANCE_COLUMNS =
+  "id, employee_id, date, clock_in, clock_out, lat_in, long_in, distance_meters, is_outside_office, outside_location_note, outside_task_status, photo_url, status";
+
+export async function getAttendance(): Promise<AttendanceRecord[]> {
+  const companyId = await getOrCreateCompanyId();
+  const { data, error } = await supabase
+    .from("hpm_attendance")
+    .select(ATTENDANCE_COLUMNS)
+    .eq("company_id", companyId)
+    .order("date", { ascending: true });
+  if (error) throw error;
+  return (data as AttendanceRow[]).map(toAttendance);
 }
 
-export function todayRecordFor(employeeId: string): AttendanceRecord | null {
+/** Scoped to one employee — used on the staff dashboard so a staff member only ever pulls their own history. */
+export async function getAttendanceForEmployee(employeeId: string): Promise<AttendanceRecord[]> {
+  const { data, error } = await supabase
+    .from("hpm_attendance")
+    .select(ATTENDANCE_COLUMNS)
+    .eq("employee_id", employeeId)
+    .order("date", { ascending: false });
+  if (error) throw error;
+  return (data as AttendanceRow[]).map(toAttendance);
+}
+
+export async function todayRecordFor(employeeId: string): Promise<AttendanceRecord | null> {
   const today = new Date().toISOString().slice(0, 10);
-  return getAttendance().find((r) => r.employeeId === employeeId && r.date === today) ?? null;
+  const { data, error } = await supabase
+    .from("hpm_attendance")
+    .select(ATTENDANCE_COLUMNS)
+    .eq("employee_id", employeeId)
+    .eq("date", today)
+    .maybeSingle();
+  if (error) throw error;
+  return data ? toAttendance(data as AttendanceRow) : null;
 }
 
 /** Clock in with an optional GPS coordinate; marks LATE if after 09:00 local time. */
-export function clockIn(
+export async function clockIn(
   employeeId: string,
   input?: {
     coords?: { lat: string; long: string };
@@ -124,41 +293,44 @@ export function clockIn(
     outsideTaskStatus?: string;
     photoDataUrl?: string;
   },
-) {
+): Promise<void> {
+  const existing = await todayRecordFor(employeeId);
+  if (existing) return;
+
+  const companyId = await getOrCreateCompanyId();
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
-  const rows = getAttendance();
-  if (rows.some((r) => r.employeeId === employeeId && r.date === today)) return;
   const isLate = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 0);
-  const record: AttendanceRecord = {
-    id: crypto.randomUUID(),
-    employeeId,
+
+  const { error } = await supabase.from("hpm_attendance").insert({
+    company_id: companyId,
+    employee_id: employeeId,
     date: today,
-    clockIn: now.toISOString(),
-    clockOut: null,
-    ...(input?.coords ? { latIn: input.coords.lat, longIn: input.coords.long } : {}),
-    ...(input?.distanceMeters !== undefined ? { distanceMeters: input.distanceMeters } : {}),
-    ...(input?.isOutsideOffice !== undefined ? { isOutsideOffice: input.isOutsideOffice } : {}),
-    ...(input?.outsideLocationNote ? { outsideLocationNote: input.outsideLocationNote } : {}),
-    ...(input?.outsideTaskStatus ? { outsideTaskStatus: input.outsideTaskStatus } : {}),
-    ...(input?.photoDataUrl ? { photoDataUrl: input.photoDataUrl } : {}),
+    clock_in: now.toISOString(),
+    clock_out: null,
+    lat_in: input?.coords?.lat ?? null,
+    long_in: input?.coords?.long ?? null,
+    distance_meters: input?.distanceMeters ?? null,
+    is_outside_office: input?.isOutsideOffice ?? null,
+    outside_location_note: input?.outsideLocationNote ?? null,
+    outside_task_status: input?.outsideTaskStatus ?? null,
+    photo_url: input?.photoDataUrl ?? null,
     status: isLate ? "LATE" : "PRESENT",
-  };
-  saveAttendance([...rows, record]);
+  });
+  if (error) throw error;
 }
 
-export function clockOut(employeeId: string) {
+export async function clockOut(employeeId: string): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
-  saveAttendance(
-    getAttendance().map((r) =>
-      r.employeeId === employeeId && r.date === today
-        ? { ...r, clockOut: new Date().toISOString() }
-        : r,
-    ),
-  );
+  const { error } = await supabase
+    .from("hpm_attendance")
+    .update({ clock_out: new Date().toISOString() })
+    .eq("employee_id", employeeId)
+    .eq("date", today);
+  if (error) throw error;
 }
 
-// ---------- Payroll: PPh 21 TER (PMK 168/2023) + BPJS ----------
+// ---------- Payroll: PPh 21 TER (PMK 168/2023) + BPJS — still localStorage, migrating later ----------
 
 const TER_CATEGORY: Record<PtkpStatus, "A" | "B" | "C"> = {
   "TK/0": "A",
@@ -266,4 +438,3 @@ export function markPayrollPaid(id: string) {
     getPayrolls().map((p) => (p.id === id ? { ...p, paymentStatus: "PAID" as PayrollStatus } : p)),
   );
 }
-
