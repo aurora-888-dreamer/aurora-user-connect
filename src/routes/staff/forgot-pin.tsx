@@ -23,30 +23,46 @@ function ForgotPinPage() {
   const [code, setCode] = useState("");
   const [newPin, setNewPin] = useState("");
 
-  const handleRequest = () => {
-    const result = requestPinResetCode(email.trim());
-    if (!result) {
-      toast.error("Email tidak ditemukan.");
-      return;
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleRequest = async () => {
+    setSubmitting(true);
+    try {
+      const result = await requestPinResetCode(email.trim());
+      if (!result) {
+        toast.error("Email tidak ditemukan.");
+        return;
+      }
+      setStaffAccountId(result.staffAccountId);
+      setDevCode(result.code); // DEMO: shown directly since email sending isn't wired up yet
+      toast.info(`[DEMO] Kode reset dikirim ke email (kode: ${result.code})`);
+      setStep(2);
+    } catch {
+      toast.error("Gagal menghubungi server. Coba lagi.");
+    } finally {
+      setSubmitting(false);
     }
-    setStaffAccountId(result.staffAccountId);
-    setDevCode(result.code); // DEMO: shown directly since email sending isn't wired up yet
-    toast.info(`[DEMO] Kode reset dikirim ke email (kode: ${result.code})`);
-    setStep(2);
   };
 
-  const handleReset = () => {
+  const handleReset = async () => {
     if (!staffAccountId) return;
     if (newPin.length !== 6) {
       toast.error("PIN baru harus 6 digit.");
       return;
     }
-    if (!confirmPinReset(staffAccountId, code.trim(), newPin)) {
-      toast.error("Kode reset salah atau kedaluwarsa.");
-      return;
+    setSubmitting(true);
+    try {
+      if (!(await confirmPinReset(staffAccountId, code.trim(), newPin))) {
+        toast.error("Kode reset salah atau kedaluwarsa.");
+        return;
+      }
+      toast.success("PIN berhasil direset. Silakan login.");
+      navigate({ to: "/staff" });
+    } catch {
+      toast.error("Gagal mereset PIN. Coba lagi.");
+    } finally {
+      setSubmitting(false);
     }
-    toast.success("PIN berhasil direset. Silakan login.");
-    navigate({ to: "/staff" });
   };
 
   return (
@@ -67,7 +83,7 @@ function ForgotPinPage() {
               <Label>Email terdaftar</Label>
               <Input className="mt-2" value={email} onChange={(e) => setEmail(e.target.value)} />
             </div>
-            <Button className="w-full" onClick={handleRequest}>
+            <Button className="w-full" onClick={handleRequest} disabled={submitting}>
               Kirim Kode Reset
             </Button>
           </div>
@@ -98,7 +114,7 @@ function ForgotPinPage() {
                 onChange={(e) => setNewPin(e.target.value)}
               />
             </div>
-            <Button className="w-full" onClick={handleReset}>
+            <Button className="w-full" onClick={handleReset} disabled={submitting}>
               Reset PIN
             </Button>
           </div>

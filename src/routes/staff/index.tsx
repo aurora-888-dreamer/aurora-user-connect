@@ -22,6 +22,7 @@ function StaffLoginPage() {
   const [checking, setChecking] = useState(true);
   const [userId, setUserId] = useState("");
   const [pin, setPin] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   useEffect(() => {
     const session = getStaffSession();
@@ -34,15 +35,22 @@ function StaffLoginPage() {
 
   if (checking) return null;
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const account = findStaffAccountByCredentials(userId.trim(), pin.trim());
-    if (!account) {
-      toast.error("User ID atau PIN salah.");
-      return;
+    setSubmitting(true);
+    try {
+      const account = await findStaffAccountByCredentials(userId.trim(), pin.trim());
+      if (!account) {
+        toast.error("User ID atau PIN salah.");
+        return;
+      }
+      setStaffSession(account);
+      navigate({ to: account.profileCompleted ? "/staff/dashboard" : "/staff/setup" });
+    } catch {
+      toast.error("Gagal menghubungi server. Periksa koneksi internet dan coba lagi.");
+    } finally {
+      setSubmitting(false);
     }
-    setStaffSession(account);
-    navigate({ to: account.profileCompleted ? "/staff/dashboard" : "/staff/setup" });
   };
 
   return (
@@ -78,8 +86,8 @@ function StaffLoginPage() {
               onChange={(e) => setPin(e.target.value)}
             />
           </div>
-          <Button type="submit" className="w-full">
-            Masuk
+          <Button type="submit" className="w-full" disabled={submitting}>
+            {submitting ? "Memeriksa…" : "Masuk"}
           </Button>
         </form>
 

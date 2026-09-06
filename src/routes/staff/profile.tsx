@@ -18,6 +18,7 @@ function StaffProfilePage() {
   const navigate = useNavigate();
   const [account, setAccount] = useState<StaffAccount | null>(null);
   const [email, setEmail] = useState("");
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
     const session = getStaffSession();
@@ -35,9 +36,16 @@ function StaffProfilePage() {
 
   if (!account) return null;
 
-  const handleSave = () => {
-    updateStaffAccount(account.id, { email: email.trim() });
-    toast.success("Profil disimpan.");
+  const handleSave = async () => {
+    setSaving(true);
+    try {
+      await updateStaffAccount(account.id, { email: email.trim() });
+      toast.success("Profil disimpan.");
+    } catch {
+      toast.error("Gagal menyimpan. Coba lagi.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -77,8 +85,8 @@ function StaffProfilePage() {
           <Input className="mt-2 font-mono" value={account.userId} disabled />
         </div>
 
-        <Button className="w-full" onClick={handleSave}>
-          Simpan
+        <Button className="w-full" onClick={handleSave} disabled={saving}>
+          {saving ? "Menyimpan…" : "Simpan"}
         </Button>
       </div>
     </div>

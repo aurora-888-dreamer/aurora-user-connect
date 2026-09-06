@@ -6,7 +6,6 @@ import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { CheckCircle2, MessageCircle, KeyRound, ScanFace, ShieldCheck } from "lucide-react";
 import { FaceCaptureDialog } from "@/components/FaceCaptureDialog";
-import { updateEmployee, getEmployees } from "@/lib/hris-data";
 import {
   getStaffSession,
   updateStaffAccount,
@@ -62,24 +61,32 @@ function StaffSetupPage() {
 
   if (!account) return null;
 
-  const handleSendOtp = () => {
-    const code = requestStaffOtp(account.id);
-    setOtpSent(true);
-    setDevOtp(code); // DEMO: shown directly since SMSGate isn't wired up yet
-    toast.info(`[DEMO] Kode OTP: ${code} (SMSGate belum terhubung, kode ditampilkan langsung)`);
-  };
-
-  const handleVerifyOtp = () => {
-    if (!verifyStaffOtp(account.id, otpInput.trim())) {
-      toast.error("Kode OTP salah atau kedaluwarsa.");
-      return;
+  const handleSendOtp = async () => {
+    try {
+      const code = await requestStaffOtp(account.id);
+      setOtpSent(true);
+      setDevOtp(code); // DEMO: shown directly since SMSGate isn't wired up yet
+      toast.info(`[DEMO] Kode OTP: ${code} (SMSGate belum terhubung, kode ditampilkan langsung)`);
+    } catch {
+      toast.error("Gagal mengirim OTP. Periksa koneksi internet.");
     }
-    updateStaffAccount(account.id, { waVerified: true });
-    toast.success("Nomor WhatsApp terverifikasi.");
-    setStep(2);
   };
 
-  const handleSetPin = () => {
+  const handleVerifyOtp = async () => {
+    try {
+      if (!(await verifyStaffOtp(account.id, otpInput.trim()))) {
+        toast.error("Kode OTP salah atau kedaluwarsa.");
+        return;
+      }
+      await updateStaffAccount(account.id, { waVerified: true });
+      toast.success("Nomor WhatsApp terverifikasi.");
+      setStep(2);
+    } catch {
+      toast.error("Gagal memverifikasi OTP. Coba lagi.");
+    }
+  };
+
+  const handleSetPin = async () => {
     if (newPin.length !== 6) {
       toast.error("PIN harus 6 digit.");
       return;
@@ -92,7 +99,9 @@ function StaffSetupPage() {
       toast.error("Konfirmasi PIN tidak cocok.");
       return;
     }
-    updateStaffAccount(account.id, { pin: newPin });
+    await updateStaffAccount(account.id, { pin: newPin } as Parameters<
+      typeof updateStaffAccount
+    >[1]);
     toast.success("PIN berhasil diubah.");
     setStep(3);
   };
@@ -107,8 +116,8 @@ function StaffSetupPage() {
     setStep(4);
   };
 
-  const handleFinish = () => {
-    updateStaffAccount(account.id, { profileCompleted: true, faceEnrolled: true });
+  const handleFinish = async () => {
+    await updateStaffAccount(account.id, { profileCompleted: true, faceEnrolled: true });
     toast.success("Setup selesai — selamat datang!");
     navigate({ to: "/staff/dashboard" });
   };
@@ -265,10 +274,11 @@ function StaffSetupPage() {
                 mode="enroll"
                 employeeName={account.fullName}
                 onClose={() => setShowFaceDialog(false)}
-                onEnrolled={({ descriptor }) => {
-                  const employees = getEmployees();
-                  const employee = employees.find((e) => e.id === account.employeeId);
-                  if (employee) updateEmployee(employee.id, { faceDescriptor: descriptor });
+                onEnrolled={async ({ descriptor }) => {
+                  await updateStaffAccount(account.id, {
+                    faceDescriptor: descriptor,
+                    faceEnrolled: true,
+                  });
                   setFaceDone(true);
                   setShowFaceDialog(false);
                   toast.success("Wajah berhasil didaftarkan.");

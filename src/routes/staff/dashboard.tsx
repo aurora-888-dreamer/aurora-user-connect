@@ -4,8 +4,18 @@ import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { LogOut, UserCog, Clock } from "lucide-react";
 import { AttendanceFlow } from "@/components/AttendanceFlow";
-import { getEmployees, getAttendance, type Employee } from "@/lib/hris-data";
-import { getStaffSession, setStaffSession, type StaffAccount } from "@/lib/staff-auth";
+import {
+  getEmployeeById,
+  getAttendanceForEmployee,
+  type Employee,
+  type AttendanceRecord,
+} from "@/lib/hris-data";
+import {
+  getStaffSession,
+  setStaffSession,
+  refreshStaffSession,
+  type StaffAccount,
+} from "@/lib/staff-auth";
 
 export const Route = createFileRoute("/staff/dashboard")({
   head: () => ({
@@ -18,6 +28,7 @@ function StaffDashboardPage() {
   const navigate = useNavigate();
   const [account, setAccount] = useState<StaffAccount | null>(null);
   const [employee, setEmployee] = useState<Employee | null>(null);
+  const [myHistory, setMyHistory] = useState<AttendanceRecord[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -31,19 +42,28 @@ function StaffDashboardPage() {
       return;
     }
     setAccount(session);
+    // Pick up any changes made from another device (e.g. HR reset the PIN).
+    refreshStaffSession()
+      .then((fresh) => fresh && setAccount(fresh))
+      .catch(() => {
+        /* keep the cached session if the refresh fails (e.g. offline) */
+      });
   }, [navigate]);
 
   useEffect(() => {
     if (!account) return;
-    setEmployee(getEmployees().find((e) => e.id === account.employeeId) ?? null);
+    getEmployeeById(account.employeeId)
+      .then((row) =>
+        // FaceID lives on the staff account, but AttendanceFlow expects it on the employee object.
+        setEmployee(row ? { ...row, faceDescriptor: account.faceDescriptor } : null),
+      )
+      .catch(() => setEmployee(null));
+    getAttendanceForEmployee(account.employeeId)
+      .then((rows) => setMyHistory(rows.slice(0, 5)))
+      .catch(() => setMyHistory([]));
   }, [account, refreshKey]);
 
   if (!account) return null;
-
-  const myHistory = getAttendance()
-    .filter((r) => r.employeeId === account.employeeId)
-    .reverse()
-    .slice(0, 5);
 
   const handleLogout = () => {
     setStaffSession(null);
@@ -66,7 +86,14 @@ function StaffDashboardPage() {
         <section className="glass-panel p-5">
           <h2 className="text-base font-semibold">Absensi Hari Ini</h2>
           <div className="mt-4">
-            <AttendanceFlow employee={employee} onChange={() => setRefreshKey((k) => k + 1)} />
+            <AttendanceFlow
+              employee={employee}
+              onChange={async () => {
+                const fresh = await refreshStaffSession();
+                if (fresh) setAccount(fresh);
+                setRefreshKey((k) => k + 1);
+              }}
+            />
           </div>
         </section>
 
