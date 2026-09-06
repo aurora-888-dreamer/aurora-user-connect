@@ -56,4 +56,3 @@ export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: n
 }
 
 export const OFFICE_RADIUS_METERS = 30;
-

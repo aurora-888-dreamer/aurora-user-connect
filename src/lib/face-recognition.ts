@@ -51,4 +51,3 @@ export function snapshotToDataUrl(video: HTMLVideoElement, maxWidth = 320): stri
   ctx?.drawImage(video, 0, 0, canvas.width, canvas.height);
   return canvas.toDataURL("image/jpeg", 0.7);
 }
-

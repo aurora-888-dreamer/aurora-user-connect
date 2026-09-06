@@ -179,4 +179,3 @@ export async function attachNikAndDevice(staffAccountId: string, nik: string) {
   const deviceId = deviceFingerprint();
   updateStaffAccount(staffAccountId, { nikEncrypted, nikIv, deviceId });
 }
-
