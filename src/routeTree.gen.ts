@@ -14,6 +14,12 @@ import { Route as AtsRouteImport } from './routes/ats'
 import { Route as DashboardRouteImport } from './routes/dashboard'
 import { Route as DirectoryRouteImport } from './routes/directory'
 import { Route as HrisRouteImport } from './routes/hris'
+import { Route as SettingsRouteImport } from './routes/settings'
+import { Route as StaffIndexRouteImport } from './routes/staff/index'
+import { Route as StaffDashboardRouteImport } from './routes/staff/dashboard'
+import { Route as StaffForgotPinRouteImport } from './routes/staff/forgot-pin'
+import { Route as StaffProfileRouteImport } from './routes/staff/profile'
+import { Route as StaffSetupRouteImport } from './routes/staff/setup'
 
 const IndexRoute = IndexRouteImport.update({
   id: '/',
@@ -40,6 +46,36 @@ const HrisRoute = HrisRouteImport.update({
   path: '/hris',
   getParentRoute: () => rootRouteImport,
 } as any)
+const SettingsRoute = SettingsRouteImport.update({
+  id: '/settings',
+  path: '/settings',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffIndexRoute = StaffIndexRouteImport.update({
+  id: '/staff/',
+  path: '/staff/',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffDashboardRoute = StaffDashboardRouteImport.update({
+  id: '/staff/dashboard',
+  path: '/staff/dashboard',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffForgotPinRoute = StaffForgotPinRouteImport.update({
+  id: '/staff/forgot-pin',
+  path: '/staff/forgot-pin',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffProfileRoute = StaffProfileRouteImport.update({
+  id: '/staff/profile',
+  path: '/staff/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffSetupRoute = StaffSetupRouteImport.update({
+  id: '/staff/setup',
+  path: '/staff/setup',
+  getParentRoute: () => rootRouteImport,
+} as any)
 
 export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
@@ -47,6 +83,12 @@ export interface FileRoutesByFullPath {
   '/dashboard': typeof DashboardRoute
   '/directory': typeof DirectoryRoute
   '/hris': typeof HrisRoute
+  '/settings': typeof SettingsRoute
+  '/staff/dashboard': typeof StaffDashboardRoute
+  '/staff/forgot-pin': typeof StaffForgotPinRoute
+  '/staff/profile': typeof StaffProfileRoute
+  '/staff/setup': typeof StaffSetupRoute
+  '/staff/': typeof StaffIndexRoute
 }
 export interface FileRoutesByTo {
   '/': typeof IndexRoute
@@ -54,6 +96,12 @@ export interface FileRoutesByTo {
   '/dashboard': typeof DashboardRoute
   '/directory': typeof DirectoryRoute
   '/hris': typeof HrisRoute
+  '/settings': typeof SettingsRoute
+  '/staff/dashboard': typeof StaffDashboardRoute
+  '/staff/forgot-pin': typeof StaffForgotPinRoute
+  '/staff/profile': typeof StaffProfileRoute
+  '/staff/setup': typeof StaffSetupRoute
+  '/staff': typeof StaffIndexRoute
 }
 export interface FileRoutesById {
   __root__: typeof rootRouteImport
@@ -62,13 +110,53 @@ export interface FileRoutesById {
   '/dashboard': typeof DashboardRoute
   '/directory': typeof DirectoryRoute
   '/hris': typeof HrisRoute
+  '/settings': typeof SettingsRoute
+  '/staff/dashboard': typeof StaffDashboardRoute
+  '/staff/forgot-pin': typeof StaffForgotPinRoute
+  '/staff/profile': typeof StaffProfileRoute
+  '/staff/setup': typeof StaffSetupRoute
+  '/staff/': typeof StaffIndexRoute
 }
 export interface FileRouteTypes {
   fileRoutesByFullPath: FileRoutesByFullPath
-  fullPaths: '/' | '/ats' | '/dashboard' | '/directory' | '/hris'
+  fullPaths:
+    | '/'
+    | '/ats'
+    | '/dashboard'
+    | '/directory'
+    | '/hris'
+    | '/settings'
+    | '/staff/dashboard'
+    | '/staff/forgot-pin'
+    | '/staff/profile'
+    | '/staff/setup'
+    | '/staff/'
   fileRoutesByTo: FileRoutesByTo
-  to: '/' | '/ats' | '/dashboard' | '/directory' | '/hris'
-  id: '__root__' | '/' | '/ats' | '/dashboard' | '/directory' | '/hris'
+  to:
+    | '/'
+    | '/ats'
+    | '/dashboard'
+    | '/directory'
+    | '/hris'
+    | '/settings'
+    | '/staff/dashboard'
+    | '/staff/forgot-pin'
+    | '/staff/profile'
+    | '/staff/setup'
+    | '/staff'
+  id:
+    | '__root__'
+    | '/'
+    | '/ats'
+    | '/dashboard'
+    | '/directory'
+    | '/hris'
+    | '/settings'
+    | '/staff/dashboard'
+    | '/staff/forgot-pin'
+    | '/staff/profile'
+    | '/staff/setup'
+    | '/staff/'
   fileRoutesById: FileRoutesById
 }
 export interface RootRouteChildren {
@@ -77,6 +165,12 @@ export interface RootRouteChildren {
   DashboardRoute: typeof DashboardRoute
   DirectoryRoute: typeof DirectoryRoute
   HrisRoute: typeof HrisRoute
+  SettingsRoute: typeof SettingsRoute
+  StaffDashboardRoute: typeof StaffDashboardRoute
+  StaffForgotPinRoute: typeof StaffForgotPinRoute
+  StaffProfileRoute: typeof StaffProfileRoute
+  StaffSetupRoute: typeof StaffSetupRoute
+  StaffIndexRoute: typeof StaffIndexRoute
 }
 
 declare module '@tanstack/react-router' {
@@ -116,6 +210,48 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof HrisRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/settings': {
+      id: '/settings'
+      path: '/settings'
+      fullPath: '/settings'
+      preLoaderRoute: typeof SettingsRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff/': {
+      id: '/staff/'
+      path: '/staff'
+      fullPath: '/staff/'
+      preLoaderRoute: typeof StaffIndexRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff/dashboard': {
+      id: '/staff/dashboard'
+      path: '/staff/dashboard'
+      fullPath: '/staff/dashboard'
+      preLoaderRoute: typeof StaffDashboardRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff/forgot-pin': {
+      id: '/staff/forgot-pin'
+      path: '/staff/forgot-pin'
+      fullPath: '/staff/forgot-pin'
+      preLoaderRoute: typeof StaffForgotPinRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff/profile': {
+      id: '/staff/profile'
+      path: '/staff/profile'
+      fullPath: '/staff/profile'
+      preLoaderRoute: typeof StaffProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff/setup': {
+      id: '/staff/setup'
+      path: '/staff/setup'
+      fullPath: '/staff/setup'
+      preLoaderRoute: typeof StaffSetupRouteImport
+      parentRoute: typeof rootRouteImport
+    }
   }
 }
 
@@ -125,6 +261,12 @@ const rootRouteChildren: RootRouteChildren = {
   DashboardRoute: DashboardRoute,
   DirectoryRoute: DirectoryRoute,
   HrisRoute: HrisRoute,
+  SettingsRoute: SettingsRoute,
+  StaffDashboardRoute: StaffDashboardRoute,
+  StaffForgotPinRoute: StaffForgotPinRoute,
+  StaffProfileRoute: StaffProfileRoute,
+  StaffSetupRoute: StaffSetupRoute,
+  StaffIndexRoute: StaffIndexRoute,
 }
 export const routeTree = rootRouteImport
   ._addFileChildren(rootRouteChildren)
