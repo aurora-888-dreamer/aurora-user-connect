@@ -23,10 +23,12 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { MapPin, LogIn, LogOut, Wallet, UserPlus } from "lucide-react";
+import { LogIn, LogOut, Wallet, UserPlus, ScanFace, KeyRound, Copy } from "lucide-react";
+import { AttendanceFlow } from "@/components/AttendanceFlow";
+import { FaceCaptureDialog } from "@/components/FaceCaptureDialog";
 import {
   addEmployee,
-  clockIn,
+  updateEmployee,
   clockOut,
   computePayroll,
   addPayroll,
@@ -34,12 +36,18 @@ import {
   getAttendance,
   getEmployees,
   getPayrolls,
-  todayRecordFor,
   type Employee,
   type EmploymentStatus,
   type PtkpStatus,
   type Payroll,
 } from "@/lib/hris-data";
+import {
+  getStaffAccounts,
+  createStaffAccount,
+  findStaffAccountByEmployee,
+  resetStaffAccountToDefaultPin,
+  type StaffAccount,
+} from "@/lib/staff-auth";
 
 export const Route = createFileRoute("/hris")({
   head: () => ({
@@ -99,6 +107,7 @@ function HrisPage() {
         <TabsList>
           <TabsTrigger value="employees">Database Karyawan</TabsTrigger>
           <TabsTrigger value="attendance">Absensi GPS</TabsTrigger>
+          <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
           <TabsTrigger value="payroll">Payroll</TabsTrigger>
         </TabsList>
 
@@ -108,6 +117,10 @@ function HrisPage() {
 
         <TabsContent value="attendance" className="mt-6">
           <AttendanceTab employees={employees} attendance={attendance} onChange={refresh} />
+        </TabsContent>
+
+        <TabsContent value="staff-accounts" className="mt-6">
+          <StaffAccountsTab employees={employees} />
         </TabsContent>
 
         <TabsContent value="payroll" className="mt-6">
@@ -131,6 +144,7 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
     ptkpStatus: "TK/0" as PtkpStatus,
     basicSalary: "",
   });
+  const [enrollTarget, setEnrollTarget] = useState<Employee | null>(null);
 
   const handleAdd = () => {
     if (!form.fullName.trim() || !form.nik.trim() || !form.basicSalary) {
@@ -287,6 +301,7 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
                 <TableHead>PTKP</TableHead>
                 <TableHead>Gaji Pokok</TableHead>
                 <TableHead>Sumber</TableHead>
+                <TableHead>FaceID</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -309,12 +324,38 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
                       <span className="text-xs text-muted-foreground">Manual</span>
                     )}
                   </TableCell>
+                  <TableCell>
+                    {e.faceDescriptor ? (
+                      <Badge className="gap-1 bg-primary/15 text-primary" variant="secondary">
+                        <ScanFace className="size-3" /> Terdaftar
+                      </Badge>
+                    ) : (
+                      <Button size="sm" variant="outline" onClick={() => setEnrollTarget(e)}>
+                        <ScanFace className="size-3.5" /> Daftarkan
+                      </Button>
+                    )}
+                  </TableCell>
                 </TableRow>
               ))}
             </TableBody>
           </Table>
         )}
       </section>
+
+      {enrollTarget && (
+        <FaceCaptureDialog
+          open={!!enrollTarget}
+          mode="enroll"
+          employeeName={enrollTarget.fullName}
+          onClose={() => setEnrollTarget(null)}
+          onEnrolled={({ descriptor }) => {
+            updateEmployee(enrollTarget.id, { faceDescriptor: descriptor });
+            toast.success(`Wajah ${enrollTarget.fullName} berhasil didaftarkan.`);
+            setEnrollTarget(null);
+            onChange();
+          }}
+        />
+      )}
     </div>
   );
 }
@@ -334,41 +375,12 @@ function AttendanceTab({
     if (!selected && employees.length > 0) setSelected(employees[0]!.id);
   }, [employees, selected]);
 
-  const record = selected ? todayRecordFor(selected) : null;
-
-  const handleClockIn = () => {
-    if (!selected) return;
-    if (!navigator.geolocation) {
-      clockIn(selected);
-      toast.success("Clock-in tercatat (tanpa GPS).");
-      onChange();
-      return;
-    }
-    navigator.geolocation.getCurrentPosition(
-      (pos) => {
-        clockIn(selected, { lat: String(pos.coords.latitude), long: String(pos.coords.longitude) });
-        toast.success("Clock-in tercatat dengan lokasi GPS.");
-        onChange();
-      },
-      () => {
-        clockIn(selected);
-        toast.warning("Lokasi tidak tersedia — clock-in tercatat tanpa GPS.");
-        onChange();
-      },
-    );
-  };
-
-  const handleClockOut = () => {
-    if (!selected) return;
-    clockOut(selected);
-    toast.success("Clock-out tercatat.");
-    onChange();
-  };
+  const employee = employees.find((e) => e.id === selected) ?? null;
 
   return (
     <div className="space-y-6">
       <section className="glass-panel p-7">
-        <h3 className="text-base font-semibold">Absensi Harian</h3>
+        <h3 className="text-base font-semibold">Absensi Harian — FaceID + GPS (mode kiosk)</h3>
         {employees.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">
             Tambahkan karyawan dulu di tab Database Karyawan.
@@ -384,40 +396,15 @@ function AttendanceTab({
                 <SelectContent>
                   {employees.map((e) => (
                     <SelectItem key={e.id} value={e.id}>
-                      {e.fullName}
+                      {e.fullName} {e.faceDescriptor ? "" : "(belum daftar wajah)"}
                     </SelectItem>
                   ))}
                 </SelectContent>
               </Select>
             </div>
-            <div className="mt-5 flex flex-wrap gap-3">
-              <Button onClick={handleClockIn} disabled={!!record?.clockIn}>
-                <LogIn className="size-4" /> Clock In
-              </Button>
-              <Button
-                onClick={handleClockOut}
-                disabled={!record?.clockIn || !!record?.clockOut}
-                variant="secondary"
-              >
-                <LogOut className="size-4" /> Clock Out
-              </Button>
+            <div className="mt-5">
+              <AttendanceFlow employee={employee} onChange={onChange} />
             </div>
-            {record && (
-              <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-                <Badge variant="secondary">{record.status}</Badge>
-                {record.clockIn && (
-                  <span>Masuk: {new Date(record.clockIn).toLocaleTimeString("id-ID")}</span>
-                )}
-                {record.clockOut && (
-                  <span>Pulang: {new Date(record.clockOut).toLocaleTimeString("id-ID")}</span>
-                )}
-                {record.latIn && (
-                  <span className="flex items-center gap-1">
-                    <MapPin className="size-3.5" /> {record.latIn}, {record.longIn}
-                  </span>
-                )}
-              </div>
-            )}
           </>
         )}
       </section>
@@ -433,6 +420,8 @@ function AttendanceTab({
                 <TableHead>Karyawan</TableHead>
                 <TableHead>Masuk</TableHead>
                 <TableHead>Pulang</TableHead>
+                <TableHead>Lokasi</TableHead>
+                <TableHead>Foto</TableHead>
                 <TableHead>Status</TableHead>
               </TableRow>
             </TableHeader>
@@ -450,7 +439,171 @@ function AttendanceTab({
                     {r.clockOut ? new Date(r.clockOut).toLocaleTimeString("id-ID") : "—"}
                   </TableCell>
                   <TableCell>
+                    {r.isOutsideOffice ? (
+                      <span className="text-xs text-destructive" title={r.outsideLocationNote}>
+                        Luar kantor · {r.outsideTaskStatus || "—"}
+                      </span>
+                    ) : r.distanceMeters !== undefined ? (
+                      <span className="text-xs text-muted-foreground">Dalam radius kantor</span>
+                    ) : (
+                      <span className="text-xs text-muted-foreground">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {r.photoDataUrl ? (
+                      <img
+                        src={r.photoDataUrl}
+                        alt="Selfie"
+                        className="size-8 rounded-full border border-border object-cover"
+                      />
+                    ) : (
+                      "—"
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Badge variant="secondary">{r.status}</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function StaffAccountsTab({ employees }: { employees: Employee[] }) {
+  const [accounts, setAccounts] = useState<StaffAccount[]>(() => getStaffAccounts());
+  const [form, setForm] = useState({ employeeId: "", whatsapp: "", email: "" });
+
+  const refresh = () => setAccounts(getStaffAccounts());
+
+  const availableEmployees = employees.filter((e) => !findStaffAccountByEmployee(e.id));
+
+  const handleCreate = () => {
+    const employee = employees.find((e) => e.id === form.employeeId);
+    if (!employee) {
+      toast.error("Pilih karyawan dulu.");
+      return;
+    }
+    if (!form.whatsapp.trim()) {
+      toast.error("Nomor WhatsApp wajib diisi (dipakai untuk verifikasi OTP saat login pertama).");
+      return;
+    }
+    const account = createStaffAccount({
+      employeeId: employee.id,
+      fullName: employee.fullName,
+      whatsapp: form.whatsapp.trim(),
+      email: form.email.trim() || employee.email,
+    });
+    toast.success(`Akun staff dibuat: ${account.userId} (PIN default: ${account.pin})`);
+    setForm({ employeeId: "", whatsapp: "", email: "" });
+    refresh();
+  };
+
+  const copyInvite = (account: StaffAccount) => {
+    const text = `User ID: ${account.userId}\nPIN awal: ${account.pin}\nLogin di halaman Staff, lalu ikuti langkah verifikasi.`;
+    navigator.clipboard?.writeText(text);
+    toast.success("Info undangan disalin ke clipboard.");
+  };
+
+  return (
+    <div className="space-y-6">
+      <section className="glass-panel p-7">
+        <h3 className="text-base font-semibold">Buatkan Akun Staff</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          User ID dibuat otomatis (pola: 5 huruf nama + kode negara + 3 digit akhir WA), PIN awal{" "}
+          <code>123456</code> — staff wajib ganti saat login pertama.
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label>Karyawan</Label>
+            <Select
+              value={form.employeeId}
+              onValueChange={(v) => setForm({ ...form, employeeId: v })}
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Pilih karyawan" />
+              </SelectTrigger>
+              <SelectContent>
+                {availableEmployees.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.fullName}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>No. WhatsApp</Label>
+            <Input
+              className="mt-2"
+              value={form.whatsapp}
+              onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
+              placeholder="08211307710"
+            />
+          </div>
+          <div>
+            <Label>Email (untuk lupa PIN)</Label>
+            <Input
+              className="mt-2"
+              value={form.email}
+              onChange={(e) => setForm({ ...form, email: e.target.value })}
+            />
+          </div>
+        </div>
+        <Button onClick={handleCreate} className="mt-5">
+          <KeyRound className="size-4" /> Buatkan Akun Staff
+        </Button>
+      </section>
+
+      <section className="glass-panel overflow-hidden">
+        {accounts.length === 0 ? (
+          <p className="p-7 text-sm text-muted-foreground">Belum ada akun staff dibuat.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>User ID</TableHead>
+                <TableHead>Nama</TableHead>
+                <TableHead>WhatsApp</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {accounts.map((a) => (
+                <TableRow key={a.id}>
+                  <TableCell className="font-mono">{a.userId}</TableCell>
+                  <TableCell>{a.fullName}</TableCell>
+                  <TableCell className="font-mono text-xs">{a.whatsapp}</TableCell>
+                  <TableCell>
+                    {a.profileCompleted ? (
+                      <Badge className="bg-primary/15 text-primary" variant="secondary">
+                        Aktif
+                      </Badge>
+                    ) : a.waVerified ? (
+                      <Badge variant="secondary">Setup belum selesai</Badge>
+                    ) : (
+                      <Badge variant="outline">Belum login pertama</Badge>
+                    )}
+                  </TableCell>
+                  <TableCell className="flex gap-2">
+                    <Button size="sm" variant="outline" onClick={() => copyInvite(a)}>
+                      <Copy className="size-3.5" /> Salin Info
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      onClick={() => {
+                        resetStaffAccountToDefaultPin(a.id);
+                        toast.success(`PIN ${a.userId} direset ke default (123456).`);
+                        refresh();
+                      }}
+                    >
+                      Reset PIN
+                    </Button>
                   </TableCell>
                 </TableRow>
               ))}
