@@ -24,6 +24,7 @@ export type Employee = {
   basicSalary: number;
   isActive: boolean;
   source?: "MANUAL" | "ATS_HANDOVER";
+  faceDescriptor?: number[];
   createdAt: string;
 };
 
@@ -35,6 +36,11 @@ export type AttendanceRecord = {
   clockOut: string | null;
   latIn?: string;
   longIn?: string;
+  distanceMeters?: number;
+  isOutsideOffice?: boolean;
+  outsideLocationNote?: string;
+  outsideTaskStatus?: string;
+  photoDataUrl?: string;
   status: AttendanceStatus;
 };
 
@@ -108,7 +114,17 @@ export function todayRecordFor(employeeId: string): AttendanceRecord | null {
 }
 
 /** Clock in with an optional GPS coordinate; marks LATE if after 09:00 local time. */
-export function clockIn(employeeId: string, coords?: { lat: string; long: string }) {
+export function clockIn(
+  employeeId: string,
+  input?: {
+    coords?: { lat: string; long: string };
+    distanceMeters?: number;
+    isOutsideOffice?: boolean;
+    outsideLocationNote?: string;
+    outsideTaskStatus?: string;
+    photoDataUrl?: string;
+  },
+) {
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
   const rows = getAttendance();
@@ -120,7 +136,12 @@ export function clockIn(employeeId: string, coords?: { lat: string; long: string
     date: today,
     clockIn: now.toISOString(),
     clockOut: null,
-    ...(coords ? { latIn: coords.lat, longIn: coords.long } : {}),
+    ...(input?.coords ? { latIn: input.coords.lat, longIn: input.coords.long } : {}),
+    ...(input?.distanceMeters !== undefined ? { distanceMeters: input.distanceMeters } : {}),
+    ...(input?.isOutsideOffice !== undefined ? { isOutsideOffice: input.isOutsideOffice } : {}),
+    ...(input?.outsideLocationNote ? { outsideLocationNote: input.outsideLocationNote } : {}),
+    ...(input?.outsideTaskStatus ? { outsideTaskStatus: input.outsideTaskStatus } : {}),
+    ...(input?.photoDataUrl ? { photoDataUrl: input.photoDataUrl } : {}),
     status: isLate ? "LATE" : "PRESENT",
   };
   saveAttendance([...rows, record]);
