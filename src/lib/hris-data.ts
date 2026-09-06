@@ -266,3 +266,4 @@ export function markPayrollPaid(id: string) {
     getPayrolls().map((p) => (p.id === id ? { ...p, paymentStatus: "PAID" as PayrollStatus } : p)),
   );
 }
+
