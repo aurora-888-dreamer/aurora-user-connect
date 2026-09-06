@@ -23,28 +23,27 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { LogIn, LogOut, Wallet, UserPlus, ScanFace, KeyRound, Copy } from "lucide-react";
+import { Wallet, UserPlus, ScanFace, KeyRound, Copy } from "lucide-react";
 import { AttendanceFlow } from "@/components/AttendanceFlow";
-import { FaceCaptureDialog } from "@/components/FaceCaptureDialog";
 import {
   addEmployee,
-  updateEmployee,
   clockOut,
   computePayroll,
   addPayroll,
   markPayrollPaid,
   getAttendance,
   getEmployees,
+  joinFaceDescriptors,
   getPayrolls,
   type Employee,
   type EmploymentStatus,
   type PtkpStatus,
   type Payroll,
+  type AttendanceRecord,
 } from "@/lib/hris-data";
 import {
   getStaffAccounts,
   createStaffAccount,
-  findStaffAccountByEmployee,
   resetStaffAccountToDefaultPin,
   type StaffAccount,
 } from "@/lib/staff-auth";
@@ -76,9 +75,31 @@ const rupiah = (n: number) => `Rp ${Math.round(n).toLocaleString("id-ID")}`;
 function HrisPage() {
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
+  const [loading, setLoading] = useState(false);
   const [employees, setEmployees] = useState<Employee[]>([]);
-  const [attendance, setAttendance] = useState(() => getAttendance());
+  const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
+  const [staffAccounts, setStaffAccounts] = useState<StaffAccount[]>([]);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
+
+  const refresh = async () => {
+    setLoading(true);
+    try {
+      const [rawEmployees, attendanceRows, accounts] = await Promise.all([
+        getEmployees(),
+        getAttendance(),
+        getStaffAccounts(),
+      ]);
+      const withFaces = await joinFaceDescriptors(rawEmployees);
+      setEmployees(withFaces);
+      setAttendance(attendanceRows);
+      setStaffAccounts(accounts);
+      setPayrolls(getPayrolls());
+    } catch {
+      toast.error("Gagal memuat data dari server. Periksa koneksi internet.");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     if (!getActiveSession()) {
@@ -86,47 +107,44 @@ function HrisPage() {
       return;
     }
     setReady(true);
-    setEmployees(getEmployees());
-    setPayrolls(getPayrolls());
+    refresh();
   }, [navigate]);
 
   if (!ready) return null;
-
-  const refresh = () => {
-    setEmployees(getEmployees());
-    setAttendance(getAttendance());
-    setPayrolls(getPayrolls());
-  };
 
   return (
     <AppShell
       title="Core HRIS Internal"
       description="Manajemen karyawan aktif, kepatuhan hukum, dan hak finansial. Akses terbatas untuk karyawan, manager, HRD admin dan payroll officer."
     >
-      <Tabs defaultValue="employees">
-        <TabsList>
-          <TabsTrigger value="employees">Database Karyawan</TabsTrigger>
-          <TabsTrigger value="attendance">Absensi GPS</TabsTrigger>
-          <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
-          <TabsTrigger value="payroll">Payroll</TabsTrigger>
-        </TabsList>
+      {loading && employees.length === 0 ? (
+        <p className="text-sm text-muted-foreground">Memuat data…</p>
+      ) : (
+        <Tabs defaultValue="employees">
+          <TabsList>
+            <TabsTrigger value="employees">Database Karyawan</TabsTrigger>
+            <TabsTrigger value="attendance">Absensi GPS</TabsTrigger>
+            <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
+            <TabsTrigger value="payroll">Payroll</TabsTrigger>
+          </TabsList>
 
-        <TabsContent value="employees" className="mt-6">
-          <EmployeeTab employees={employees} onChange={refresh} />
-        </TabsContent>
+          <TabsContent value="employees" className="mt-6">
+            <EmployeeTab employees={employees} onChange={refresh} />
+          </TabsContent>
 
-        <TabsContent value="attendance" className="mt-6">
-          <AttendanceTab employees={employees} attendance={attendance} onChange={refresh} />
-        </TabsContent>
+          <TabsContent value="attendance" className="mt-6">
+            <AttendanceTab employees={employees} attendance={attendance} onChange={refresh} />
+          </TabsContent>
 
-        <TabsContent value="staff-accounts" className="mt-6">
-          <StaffAccountsTab employees={employees} />
-        </TabsContent>
+          <TabsContent value="staff-accounts" className="mt-6">
+            <StaffAccountsTab employees={employees} accounts={staffAccounts} onChange={refresh} />
+          </TabsContent>
 
-        <TabsContent value="payroll" className="mt-6">
-          <PayrollTab employees={employees} payrolls={payrolls} onChange={refresh} />
-        </TabsContent>
-      </Tabs>
+          <TabsContent value="payroll" className="mt-6">
+            <PayrollTab employees={employees} payrolls={payrolls} onChange={refresh} />
+          </TabsContent>
+        </Tabs>
+      )}
     </AppShell>
   );
 }
@@ -144,30 +162,37 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
     ptkpStatus: "TK/0" as PtkpStatus,
     basicSalary: "",
   });
-  const [enrollTarget, setEnrollTarget] = useState<Employee | null>(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  const handleAdd = () => {
+  const handleAdd = async () => {
     if (!form.fullName.trim() || !form.nik.trim() || !form.basicSalary) {
       toast.error("Lengkapi NIK, nama, dan gaji pokok.");
       return;
     }
-    addEmployee({
-      nik: form.nik,
-      fullName: form.fullName,
-      email: form.email,
-      phone: form.phone,
-      department: form.department || "General",
-      employmentStatus: form.employmentStatus,
-      joinDate: form.joinDate,
-      npwp: form.npwp,
-      ptkpStatus: form.ptkpStatus,
-      basicSalary: Number(form.basicSalary),
-      isActive: true,
-      source: "MANUAL",
-    });
-    toast.success(`Karyawan ${form.fullName} ditambahkan.`);
-    setForm({ ...form, nik: "", fullName: "", email: "", phone: "", basicSalary: "" });
-    onChange();
+    setSubmitting(true);
+    try {
+      await addEmployee({
+        nik: form.nik,
+        fullName: form.fullName,
+        email: form.email,
+        phone: form.phone,
+        department: form.department || "General",
+        employmentStatus: form.employmentStatus,
+        joinDate: form.joinDate,
+        npwp: form.npwp,
+        ptkpStatus: form.ptkpStatus,
+        basicSalary: Number(form.basicSalary),
+        isActive: true,
+        source: "MANUAL",
+      });
+      toast.success(`Karyawan ${form.fullName} ditambahkan.`);
+      setForm({ ...form, nik: "", fullName: "", email: "", phone: "", basicSalary: "" });
+      onChange();
+    } catch {
+      toast.error("Gagal menambahkan karyawan. Coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   return (
@@ -280,8 +305,8 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
             />
           </div>
         </div>
-        <Button onClick={handleAdd} className="mt-5">
-          <UserPlus className="size-4" /> Tambah Karyawan
+        <Button onClick={handleAdd} className="mt-5" disabled={submitting}>
+          <UserPlus className="size-4" /> {submitting ? "Menyimpan…" : "Tambah Karyawan"}
         </Button>
       </section>
 
@@ -330,9 +355,9 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
                         <ScanFace className="size-3" /> Terdaftar
                       </Badge>
                     ) : (
-                      <Button size="sm" variant="outline" onClick={() => setEnrollTarget(e)}>
-                        <ScanFace className="size-3.5" /> Daftarkan
-                      </Button>
+                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
+                        <ScanFace className="size-3.5" /> Menunggu staff daftar sendiri
+                      </span>
                     )}
                   </TableCell>
                 </TableRow>
@@ -341,21 +366,11 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
           </Table>
         )}
       </section>
-
-      {enrollTarget && (
-        <FaceCaptureDialog
-          open={!!enrollTarget}
-          mode="enroll"
-          employeeName={enrollTarget.fullName}
-          onClose={() => setEnrollTarget(null)}
-          onEnrolled={({ descriptor }) => {
-            updateEmployee(enrollTarget.id, { faceDescriptor: descriptor });
-            toast.success(`Wajah ${enrollTarget.fullName} berhasil didaftarkan.`);
-            setEnrollTarget(null);
-            onChange();
-          }}
-        />
-      )}
+      <p className="text-xs text-muted-foreground">
+        FaceID hanya bisa didaftarkan oleh staff sendiri, di HP mereka, saat login pertama (menu{" "}
+        <strong>Akun Staff</strong> untuk membuatkan akunnya). Admin tidak bisa mendaftarkan wajah
+        karyawan dari sini.
+      </p>
     </div>
   );
 }
@@ -366,7 +381,7 @@ function AttendanceTab({
   onChange,
 }: {
   employees: Employee[];
-  attendance: ReturnType<typeof getAttendance>;
+  attendance: AttendanceRecord[];
   onChange: () => void;
 }) {
   const [selected, setSelected] = useState<string>(employees[0]?.id ?? "");
@@ -473,15 +488,23 @@ function AttendanceTab({
   );
 }
 
-function StaffAccountsTab({ employees }: { employees: Employee[] }) {
-  const [accounts, setAccounts] = useState<StaffAccount[]>(() => getStaffAccounts());
+function StaffAccountsTab({
+  employees,
+  accounts,
+  onChange,
+}: {
+  employees: Employee[];
+  accounts: StaffAccount[];
+  onChange: () => void;
+}) {
   const [form, setForm] = useState({ employeeId: "", whatsapp: "", email: "" });
+  const [submitting, setSubmitting] = useState(false);
+  const [resettingId, setResettingId] = useState<string | null>(null);
 
-  const refresh = () => setAccounts(getStaffAccounts());
+  const assignedEmployeeIds = new Set(accounts.map((a) => a.employeeId));
+  const availableEmployees = employees.filter((e) => !assignedEmployeeIds.has(e.id));
 
-  const availableEmployees = employees.filter((e) => !findStaffAccountByEmployee(e.id));
-
-  const handleCreate = () => {
+  const handleCreate = async () => {
     const employee = employees.find((e) => e.id === form.employeeId);
     if (!employee) {
       toast.error("Pilih karyawan dulu.");
@@ -491,21 +514,41 @@ function StaffAccountsTab({ employees }: { employees: Employee[] }) {
       toast.error("Nomor WhatsApp wajib diisi (dipakai untuk verifikasi OTP saat login pertama).");
       return;
     }
-    const account = createStaffAccount({
-      employeeId: employee.id,
-      fullName: employee.fullName,
-      whatsapp: form.whatsapp.trim(),
-      email: form.email.trim() || employee.email,
-    });
-    toast.success(`Akun staff dibuat: ${account.userId} (PIN default: ${account.pin})`);
-    setForm({ employeeId: "", whatsapp: "", email: "" });
-    refresh();
+    setSubmitting(true);
+    try {
+      const account = await createStaffAccount({
+        employeeId: employee.id,
+        fullName: employee.fullName,
+        whatsapp: form.whatsapp.trim(),
+        email: form.email.trim() || employee.email,
+      });
+      toast.success(`Akun staff dibuat: ${account.userId} (PIN default: 123456)`);
+      setForm({ employeeId: "", whatsapp: "", email: "" });
+      onChange();
+    } catch {
+      toast.error("Gagal membuat akun staff. Coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
   };
 
   const copyInvite = (account: StaffAccount) => {
-    const text = `User ID: ${account.userId}\nPIN awal: ${account.pin}\nLogin di halaman Staff, lalu ikuti langkah verifikasi.`;
+    const text = `User ID: ${account.userId}\nPIN awal: 123456\nLogin di halaman Staff, lalu ikuti langkah verifikasi.`;
     navigator.clipboard?.writeText(text);
     toast.success("Info undangan disalin ke clipboard.");
+  };
+
+  const handleResetPin = async (account: StaffAccount) => {
+    setResettingId(account.id);
+    try {
+      await resetStaffAccountToDefaultPin(account.id);
+      toast.success(`PIN ${account.userId} direset ke default (123456).`);
+      onChange();
+    } catch {
+      toast.error("Gagal mereset PIN. Coba lagi.");
+    } finally {
+      setResettingId(null);
+    }
   };
 
   return (
@@ -553,8 +596,8 @@ function StaffAccountsTab({ employees }: { employees: Employee[] }) {
             />
           </div>
         </div>
-        <Button onClick={handleCreate} className="mt-5">
-          <KeyRound className="size-4" /> Buatkan Akun Staff
+        <Button onClick={handleCreate} className="mt-5" disabled={submitting}>
+          <KeyRound className="size-4" /> {submitting ? "Membuat…" : "Buatkan Akun Staff"}
         </Button>
       </section>
 
@@ -596,13 +639,10 @@ function StaffAccountsTab({ employees }: { employees: Employee[] }) {
                     <Button
                       size="sm"
                       variant="outline"
-                      onClick={() => {
-                        resetStaffAccountToDefaultPin(a.id);
-                        toast.success(`PIN ${a.userId} direset ke default (123456).`);
-                        refresh();
-                      }}
+                      disabled={resettingId === a.id}
+                      onClick={() => handleResetPin(a)}
                     >
-                      Reset PIN
+                      {resettingId === a.id ? "Mereset…" : "Reset PIN"}
                     </Button>
                   </TableCell>
                 </TableRow>
@@ -793,4 +833,3 @@ function Stat({ label, value, highlight }: { label: string; value: string; highl
     </div>
   );
 }
-

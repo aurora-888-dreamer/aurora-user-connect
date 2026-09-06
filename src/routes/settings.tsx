@@ -11,7 +11,7 @@ import {
   getCompanyProfile,
   saveCompanyProfile,
   isOfficeLocationSet,
-  OFFICE_RADIUS_METERS,
+  DEFAULT_OFFICE_RADIUS_METERS,
   type CompanyProfile,
 } from "@/lib/company-data";
 
@@ -31,7 +31,8 @@ export const Route = createFileRoute("/settings")({
 function SettingsPage() {
   const navigate = useNavigate();
   const [ready, setReady] = useState(false);
-  const [form, setForm] = useState<CompanyProfile>(getCompanyProfile());
+  const [saving, setSaving] = useState(false);
+  const [form, setForm] = useState<CompanyProfile | null>(null);
   const [locating, setLocating] = useState(false);
 
   useEffect(() => {
@@ -39,11 +40,15 @@ function SettingsPage() {
       navigate({ to: "/" });
       return;
     }
-    setReady(true);
-    setForm(getCompanyProfile());
+    getCompanyProfile()
+      .then((profile) => {
+        setForm(profile);
+        setReady(true);
+      })
+      .catch(() => toast.error("Gagal memuat pengaturan perusahaan."));
   }, [navigate]);
 
-  if (!ready) return null;
+  if (!ready || !form) return null;
 
   const handleUseCurrentLocation = () => {
     if (!navigator.geolocation) {
@@ -53,7 +58,9 @@ function SettingsPage() {
     setLocating(true);
     navigator.geolocation.getCurrentPosition(
       (pos) => {
-        setForm((f) => ({ ...f, officeLat: pos.coords.latitude, officeLng: pos.coords.longitude }));
+        setForm((f) =>
+          f ? { ...f, officeLat: pos.coords.latitude, officeLng: pos.coords.longitude } : f,
+        );
         setLocating(false);
         toast.success("Titik lokasi kantor diambil dari posisi Anda saat ini.");
       },
@@ -64,13 +71,20 @@ function SettingsPage() {
     );
   };
 
-  const handleSave = () => {
+  const handleSave = async () => {
     if (!form.name.trim()) {
       toast.error("Nama perusahaan wajib diisi.");
       return;
     }
-    saveCompanyProfile(form);
-    toast.success("Profil perusahaan disimpan.");
+    setSaving(true);
+    try {
+      await saveCompanyProfile(form);
+      toast.success("Profil perusahaan disimpan.");
+    } catch {
+      toast.error("Gagal menyimpan. Periksa koneksi internet dan coba lagi.");
+    } finally {
+      setSaving(false);
+    }
   };
 
   return (
@@ -140,11 +154,11 @@ function SettingsPage() {
           Titik Lokasi Kantor
         </h3>
         <p className="mt-1 text-sm text-muted-foreground">
-          Karyawan yang absen di luar radius {OFFICE_RADIUS_METERS} meter dari titik ini akan
-          diminta konfirmasi dan mengisi keterangan lokasi &amp; status tugas.
+          Karyawan yang absen di luar radius yang diatur dari titik ini akan diminta konfirmasi dan
+          mengisi keterangan lokasi &amp; status tugas.
         </p>
 
-        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <div>
             <Label>Latitude</Label>
             <Input
@@ -175,6 +189,21 @@ function SettingsPage() {
               }
             />
           </div>
+          <div>
+            <Label>Radius Toleransi (meter)</Label>
+            <Input
+              type="number"
+              min={0}
+              className="mt-2"
+              value={form.officeRadiusMeters}
+              onChange={(e) =>
+                setForm({
+                  ...form,
+                  officeRadiusMeters: Number(e.target.value) || DEFAULT_OFFICE_RADIUS_METERS,
+                })
+              }
+            />
+          </div>
         </div>
 
         <Button
@@ -194,8 +223,8 @@ function SettingsPage() {
         )}
       </section>
 
-      <Button onClick={handleSave} size="lg">
-        <Save className="size-4" /> Simpan Pengaturan
+      <Button onClick={handleSave} size="lg" disabled={saving}>
+        <Save className="size-4" /> {saving ? "Menyimpan…" : "Simpan Pengaturan"}
       </Button>
     </AppShell>
   );

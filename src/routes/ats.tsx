@@ -302,30 +302,38 @@ function PipelineTab({
     onChange();
   };
 
-  const advance = (applicant: Applicant) => {
+  const advance = async (applicant: Applicant) => {
     const idx = APPLICANT_PIPELINE.indexOf(applicant.status);
     const next =
       idx >= 0 && idx < APPLICANT_PIPELINE.length - 1 ? APPLICANT_PIPELINE[idx + 1] : null;
     if (!next) return;
-    const { handedOverEmployee } = updateApplicantStatus(
-      applicant.id,
-      next,
-      next === "HIRED" ? handover : undefined,
-    );
-    if (handedOverEmployee) {
-      toast.success(
-        `Handover berhasil — ${applicant.fullName} dibuat sebagai draft karyawan di Core HRIS.`,
+    try {
+      const { handedOverEmployee } = await updateApplicantStatus(
+        applicant.id,
+        next,
+        next === "HIRED" ? handover : undefined,
       );
-    } else {
-      toast.success(`${applicant.fullName} pindah ke tahap ${next}.`);
+      if (handedOverEmployee) {
+        toast.success(
+          `Handover berhasil — ${applicant.fullName} dibuat sebagai draft karyawan di Core HRIS.`,
+        );
+      } else {
+        toast.success(`${applicant.fullName} pindah ke tahap ${next}.`);
+      }
+      onChange();
+    } catch {
+      toast.error("Gagal memindahkan tahap kandidat. Coba lagi.");
     }
-    onChange();
   };
 
-  const reject = (applicant: Applicant) => {
-    updateApplicantStatus(applicant.id, "REJECTED" as ApplicantStatus);
-    toast.info(`${applicant.fullName} ditandai REJECTED.`);
-    onChange();
+  const reject = async (applicant: Applicant) => {
+    try {
+      await updateApplicantStatus(applicant.id, "REJECTED" as ApplicantStatus);
+      toast.info(`${applicant.fullName} ditandai REJECTED.`);
+      onChange();
+    } catch {
+      toast.error("Gagal menandai REJECTED. Coba lagi.");
+    }
   };
 
   return (
