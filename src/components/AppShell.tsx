@@ -1,5 +1,5 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, Users, Briefcase, Database, LogOut } from "lucide-react";
+import { LayoutDashboard, Users, Briefcase, Database, LogOut, Settings } from "lucide-react";
 import type { ReactNode } from "react";
 import { getActiveSession, setActiveSession } from "@/lib/aurora-id";
 
@@ -8,6 +8,7 @@ const tools = [
   { to: "/hris", label: "Core HRIS", icon: Users },
   { to: "/ats", label: "ATS Recruitment", icon: Briefcase },
   { to: "/directory", label: "User ID Directory", icon: Database },
+  { to: "/settings", label: "Pengaturan", icon: Settings },
 ] as const;
 
 export function AppShell({
