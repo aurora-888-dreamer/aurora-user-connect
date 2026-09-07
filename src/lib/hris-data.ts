@@ -92,7 +92,6 @@ export type Employee = {
   healthAllowance?: number;
   insuranceAllowance?: number;
   overtimeRatePerHour?: number;
-  jhtDeduction?: number;
   performanceBonus?: number;
   isActive: boolean;
   source?: "MANUAL" | "ATS_HANDOVER" | undefined;
@@ -128,10 +127,22 @@ export type Payroll = {
   period: string;
   basicSalary: number;
   allowances: number;
+  allowanceBreakdown: {
+    transport: number;
+    position: number;
+    health: number;
+    insurance: number;
+    mealRate: number;
+    mealDays: number;
+    mealTotal: number;
+  };
   overtimePay: number;
+  bonus: number;
+  penalty: number;
   bpjsHealthEmp: number;
   bpjsTkEmp: number;
   jhtDeduction: number;
+  jhtRatePercent: number;
   pph21Amount: number;
   netSalary: number;
   paymentStatus: PayrollStatus;
@@ -184,7 +195,6 @@ type EmployeeRow = {
   health_allowance: number;
   insurance_allowance: number;
   overtime_rate_per_hour: number;
-  jht_deduction: number;
   performance_bonus: number;
   created_at: string;
 };
@@ -220,7 +230,6 @@ function toEmployee(row: EmployeeRow): Employee {
     healthAllowance: row.health_allowance ?? 0,
     insuranceAllowance: row.insurance_allowance ?? 0,
     overtimeRatePerHour: row.overtime_rate_per_hour ?? 0,
-    jhtDeduction: row.jht_deduction ?? 0,
     performanceBonus: row.performance_bonus ?? 0,
     isActive: row.is_active,
     source: (row.source as Employee["source"]) ?? "MANUAL",
@@ -234,7 +243,7 @@ function toEmployee(row: EmployeeRow): Employee {
 }
 
 const EMPLOYEE_COLUMNS =
-  "id, nik, full_name, email, phone, department, position, rank, position_level, blood_type, date_of_birth, location_id, shift_type_id, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, jht_deduction, performance_bonus, created_at";
+  "id, nik, full_name, email, phone, department, position, rank, position_level, blood_type, date_of_birth, location_id, shift_type_id, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, performance_bonus, created_at";
 
 export async function getEmployees(): Promise<Employee[]> {
   const companyId = await getOrCreateCompanyId();
@@ -318,7 +327,6 @@ export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Pr
       health_allowance: input.healthAllowance || 0,
       insurance_allowance: input.insuranceAllowance || 0,
       overtime_rate_per_hour: input.overtimeRatePerHour || 0,
-      jht_deduction: input.jhtDeduction || 0,
       performance_bonus: input.performanceBonus || 0,
     })
     .select(EMPLOYEE_COLUMNS)
@@ -362,7 +370,6 @@ export async function updateEmployee(id: string, patch: Partial<Employee>): Prom
     dbPatch.insurance_allowance = patch.insuranceAllowance;
   if (patch.overtimeRatePerHour !== undefined)
     dbPatch.overtime_rate_per_hour = patch.overtimeRatePerHour;
-  if (patch.jhtDeduction !== undefined) dbPatch.jht_deduction = patch.jhtDeduction;
   if (patch.performanceBonus !== undefined) dbPatch.performance_bonus = patch.performanceBonus;
   // Note: patch.faceDescriptor is intentionally ignored here — FaceID is
   // written to hpm_staff_users via staff-auth.ts's updateStaffAccount, not here.
@@ -1084,45 +1091,78 @@ const BPJS_JP_CAP = 10_547_400;
  * separate monthly allowance) — the once-off pension payout at age 55 is a
  * different calculation (see computePensionPayout).
  */
+/**
+ * Builds one payroll line from an employee's stored rates + the real
+ * attendance numbers for the period (from computeAttendanceSummary) —
+ * tunjangan makan × hari hadir, lembur × jam, not manually typed amounts.
+ * Transport/Jabatan/Kesehatan/Asuransi stay flat monthly. JHT is a
+ * company-wide percentage of basic salary (Pengaturan), not a manual
+ * per-employee amount. Bonus/denda are one-off amounts for this specific
+ * payroll run. The once-off pension payout at age 55 is a separate
+ * calculation (see computePensionPayout).
+ */
 export function computePayroll(input: {
   employee: Employee;
   period: string;
   presentDays: number;
   overtimeHours: number;
+  jhtRatePercent: number;
+  bonus?: number;
+  penalty?: number;
 }): Omit<Payroll, "id" | "createdAt"> {
-  const { employee, period, presentDays, overtimeHours } = input;
+  const { employee, period, presentDays, overtimeHours, jhtRatePercent } = input;
+  const bonus = input.bonus ?? 0;
+  const penalty = input.penalty ?? 0;
   const basicSalary = employee.basicSalary ?? 0;
   const overtimePay = Math.round((employee.overtimeRatePerHour ?? 0) * overtimeHours);
-  const allowances = Math.round(
-    (employee.transportAllowance ?? 0) +
-      (employee.positionAllowance ?? 0) +
-      (employee.healthAllowance ?? 0) +
-      (employee.insuranceAllowance ?? 0) +
-      (employee.mealAllowance ?? 0) * presentDays,
-  );
-  const jhtDeduction = employee.jhtDeduction ?? 0;
 
-  const bruto = basicSalary + allowances + overtimePay;
+  const mealRate = employee.mealAllowance ?? 0;
+  const mealTotal = Math.round(mealRate * presentDays);
+  const allowanceBreakdown = {
+    transport: employee.transportAllowance ?? 0,
+    position: employee.positionAllowance ?? 0,
+    health: employee.healthAllowance ?? 0,
+    insurance: employee.insuranceAllowance ?? 0,
+    mealRate,
+    mealDays: presentDays,
+    mealTotal,
+  };
+  const allowances = Math.round(
+    allowanceBreakdown.transport +
+      allowanceBreakdown.position +
+      allowanceBreakdown.health +
+      allowanceBreakdown.insurance +
+      mealTotal,
+  );
+
+  const bruto = basicSalary + allowances + overtimePay + bonus;
   const category = TER_CATEGORY[employee.ptkpStatus];
   const rate = terRate(category, bruto);
   const pph21Amount = Math.round(bruto * rate);
 
   const healthBasis = Math.min(basicSalary, BPJS_HEALTH_CAP);
   const bpjsHealthEmp = Math.round(healthBasis * 0.01);
+  // JHT is deducted separately below via the company's configurable jhtRatePercent —
+  // bpjsTkEmp here is JP (Jaminan Pensiun) only, so JHT isn't counted twice.
   const jpBasis = Math.min(basicSalary, BPJS_JP_CAP);
-  const bpjsTkEmp = Math.round(basicSalary * 0.02 + jpBasis * 0.01);
+  const bpjsTkEmp = Math.round(jpBasis * 0.01);
+  const jhtDeduction = Math.round(basicSalary * (jhtRatePercent / 100));
 
-  const netSalary = bruto - pph21Amount - bpjsHealthEmp - bpjsTkEmp - jhtDeduction;
+  const netSalary = bruto - pph21Amount - bpjsHealthEmp - bpjsTkEmp - jhtDeduction - penalty;
 
   return {
     employeeId: employee.id,
     period,
     basicSalary,
     allowances,
+    allowanceBreakdown,
     overtimePay,
+    bonus,
+    penalty,
     bpjsHealthEmp,
     bpjsTkEmp,
     jhtDeduction,
+    jhtRatePercent,
     pph21Amount,
     netSalary,
     paymentStatus: "DRAFT",

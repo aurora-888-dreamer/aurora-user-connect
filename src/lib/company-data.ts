@@ -30,6 +30,8 @@ export type CompanyProfile = {
   /** Pension payout formula at retirement (age 55): (pensionYearsMultiplier × years of service + pensionConstant) × basic salary. Default matches the common government-standard "2n+1". */
   pensionYearsMultiplier: number;
   pensionConstant: number;
+  /** JHT (Jaminan Hari Tua) deduction rate — percent of basic salary, company-wide, not per-employee. Government default for the employee's own share is 2%. */
+  jhtRatePercent: number;
 };
 
 const DEFAULT_COMPANY: CompanyProfile = {
@@ -47,6 +49,7 @@ const DEFAULT_COMPANY: CompanyProfile = {
   payrollCutoffDay: 1,
   pensionYearsMultiplier: 2,
   pensionConstant: 1,
+  jhtRatePercent: 2,
 };
 
 /** Fallback used only if a read/write happens before the office radius has ever been set. */
@@ -93,7 +96,7 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
   const { data, error } = await supabase
     .from("hpm_companies")
     .select(
-      "name, address, phone, whatsapp, email, website, office_lat, office_lng, office_radius_meters, work_start_time, work_end_time, payroll_cutoff_day, pension_years_multiplier, pension_constant",
+      "name, address, phone, whatsapp, email, website, office_lat, office_lng, office_radius_meters, work_start_time, work_end_time, payroll_cutoff_day, pension_years_multiplier, pension_constant, jht_rate_percent",
     )
     .eq("id", companyId)
     .single();
@@ -115,6 +118,7 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
     payrollCutoffDay: data.payroll_cutoff_day ?? 1,
     pensionYearsMultiplier: data.pension_years_multiplier ?? 2,
     pensionConstant: data.pension_constant ?? 1,
+    jhtRatePercent: data.jht_rate_percent ?? 2,
   };
 }
 
@@ -137,6 +141,7 @@ export async function saveCompanyProfile(profile: CompanyProfile): Promise<void>
       payroll_cutoff_day: profile.payrollCutoffDay,
       pension_years_multiplier: profile.pensionYearsMultiplier,
       pension_constant: profile.pensionConstant,
+      jht_rate_percent: profile.jhtRatePercent,
     })
     .eq("id", companyId);
 
