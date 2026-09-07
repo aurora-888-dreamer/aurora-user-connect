@@ -7,13 +7,28 @@
  * localStorage-backed for now (lower priority — can migrate next).
  */
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import type { Database, Json } from "@/integrations/supabase/types";
 import { getOrCreateCompanyId } from "@/lib/company-data";
 
 export type EmploymentStatus = "PKWT" | "PKWTT" | "INTERN";
 export type PtkpStatus = "TK/0" | "TK/1" | "TK/2" | "TK/3" | "K/0" | "K/1" | "K/2" | "K/3";
 export type AttendanceStatus = "PRESENT" | "LATE" | "LEAVE" | "ALPHA";
 export type PayrollStatus = "DRAFT" | "PAID";
+
+export type MaritalStatus = "Menikah" | "Belum Menikah" | "Cerai Hidup" | "Cerai Mati";
+
+export type FamilyData = {
+  religion?: string;
+  maritalStatus?: MaritalStatus;
+  // Filled when Menikah:
+  spouseName?: string;
+  childrenCount?: number;
+  childrenNames?: string;
+  // Filled when Belum Menikah / Cerai:
+  fatherName?: string;
+  motherName?: string;
+  siblingsCount?: number;
+};
 
 export type Employee = {
   id: string;
@@ -22,6 +37,7 @@ export type Employee = {
   email: string;
   phone: string;
   department: string;
+  position: string;
   employmentStatus: EmploymentStatus;
   joinDate: string;
   npwp: string;
@@ -29,6 +45,8 @@ export type Employee = {
   basicSalary: number;
   isActive: boolean;
   source?: "MANUAL" | "ATS_HANDOVER" | undefined;
+  familyData?: FamilyData | undefined;
+  supervisorId?: string | undefined;
   /** Convenience field only — the real FaceID data lives on the staff account (hpm_staff_users.face_descriptor), not here. Populated by joinFaceDescriptors(). */
   faceDescriptor?: number[] | undefined;
   createdAt: string;
@@ -47,6 +65,9 @@ export type AttendanceRecord = {
   outsideLocationNote?: string | undefined;
   outsideTaskStatus?: string | undefined;
   photoDataUrl?: string | undefined;
+  lateInReason?: string | undefined;
+  lateOutReason?: string | undefined;
+  needsSupervisorApproval: boolean;
   status: AttendanceStatus;
 };
 
@@ -86,6 +107,7 @@ type EmployeeRow = {
   email: string | null;
   phone: string | null;
   department: string | null;
+  position: string | null;
   employment_status: string;
   join_date: string | null;
   npwp: string | null;
@@ -93,6 +115,8 @@ type EmployeeRow = {
   basic_salary: number;
   is_active: boolean;
   source: string | null;
+  family_data: unknown;
+  supervisor_id: string | null;
   created_at: string;
 };
 
@@ -104,6 +128,7 @@ function toEmployee(row: EmployeeRow): Employee {
     email: row.email ?? "",
     phone: row.phone ?? "",
     department: row.department ?? "",
+    position: row.position ?? "",
     employmentStatus: (row.employment_status as EmploymentStatus) ?? "PKWT",
     joinDate: row.join_date ?? "",
     npwp: row.npwp ?? "",
@@ -111,12 +136,17 @@ function toEmployee(row: EmployeeRow): Employee {
     basicSalary: row.basic_salary,
     isActive: row.is_active,
     source: (row.source as Employee["source"]) ?? "MANUAL",
+    familyData:
+      row.family_data && typeof row.family_data === "object"
+        ? (row.family_data as FamilyData)
+        : undefined,
+    supervisorId: row.supervisor_id ?? undefined,
     createdAt: row.created_at,
   };
 }
 
 const EMPLOYEE_COLUMNS =
-  "id, nik, full_name, email, phone, department, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, created_at";
+  "id, nik, full_name, email, phone, department, position, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, created_at";
 
 export async function getEmployees(): Promise<Employee[]> {
   const companyId = await getOrCreateCompanyId();
@@ -175,6 +205,7 @@ export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Pr
       email: input.email || null,
       phone: input.phone || null,
       department: input.department || null,
+      position: input.position || null,
       employment_status: input.employmentStatus,
       join_date: input.joinDate || null,
       npwp: input.npwp || null,
@@ -182,6 +213,8 @@ export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Pr
       basic_salary: input.basicSalary,
       is_active: input.isActive,
       source: input.source ?? "MANUAL",
+      family_data: (input.familyData ?? null) as unknown as Json | null,
+      supervisor_id: input.supervisorId || null,
     })
     .select(EMPLOYEE_COLUMNS)
     .single();
@@ -196,12 +229,16 @@ export async function updateEmployee(id: string, patch: Partial<Employee>): Prom
   if (patch.email !== undefined) dbPatch.email = patch.email;
   if (patch.phone !== undefined) dbPatch.phone = patch.phone;
   if (patch.department !== undefined) dbPatch.department = patch.department;
+  if (patch.position !== undefined) dbPatch.position = patch.position;
   if (patch.employmentStatus !== undefined) dbPatch.employment_status = patch.employmentStatus;
   if (patch.joinDate !== undefined) dbPatch.join_date = patch.joinDate;
   if (patch.npwp !== undefined) dbPatch.npwp = patch.npwp;
   if (patch.ptkpStatus !== undefined) dbPatch.ptkp_status = patch.ptkpStatus;
   if (patch.basicSalary !== undefined) dbPatch.basic_salary = patch.basicSalary;
   if (patch.isActive !== undefined) dbPatch.is_active = patch.isActive;
+  if (patch.familyData !== undefined)
+    dbPatch.family_data = (patch.familyData ?? null) as unknown as Json | null;
+  if (patch.supervisorId !== undefined) dbPatch.supervisor_id = patch.supervisorId || null;
   // Note: patch.faceDescriptor is intentionally ignored here — FaceID is
   // written to hpm_staff_users via staff-auth.ts's updateStaffAccount, not here.
   if (Object.keys(dbPatch).length === 0) return;
@@ -232,6 +269,9 @@ type AttendanceRow = {
   outside_location_note: string | null;
   outside_task_status: string | null;
   photo_url: string | null;
+  late_in_reason: string | null;
+  late_out_reason: string | null;
+  needs_supervisor_approval: boolean;
   status: string | null;
 };
 
@@ -249,12 +289,15 @@ function toAttendance(row: AttendanceRow): AttendanceRecord {
     outsideLocationNote: row.outside_location_note ?? undefined,
     outsideTaskStatus: row.outside_task_status ?? undefined,
     photoDataUrl: row.photo_url ?? undefined,
+    lateInReason: row.late_in_reason ?? undefined,
+    lateOutReason: row.late_out_reason ?? undefined,
+    needsSupervisorApproval: row.needs_supervisor_approval ?? false,
     status: (row.status as AttendanceStatus) ?? "PRESENT",
   };
 }
 
 const ATTENDANCE_COLUMNS =
-  "id, employee_id, date, clock_in, clock_out, lat_in, long_in, distance_meters, is_outside_office, outside_location_note, outside_task_status, photo_url, status";
+  "id, employee_id, date, clock_in, clock_out, lat_in, long_in, distance_meters, is_outside_office, outside_location_note, outside_task_status, photo_url, late_in_reason, late_out_reason, needs_supervisor_approval, status";
 
 export async function getAttendance(): Promise<AttendanceRecord[]> {
   const companyId = await getOrCreateCompanyId();
@@ -323,6 +366,7 @@ export async function clockIn(
     outsideLocationNote?: string;
     outsideTaskStatus?: string;
     photoDataUrl?: string;
+    lateInReason?: string;
   },
 ): Promise<void> {
   const open = await getOpenSessionFor(employeeId);
@@ -349,19 +393,35 @@ export async function clockIn(
     outside_location_note: input?.outsideLocationNote ?? null,
     outside_task_status: input?.outsideTaskStatus ?? null,
     photo_url: input?.photoDataUrl ?? null,
+    late_in_reason: input?.lateInReason ?? null,
     status: isLate ? "LATE" : "PRESENT",
   });
   if (error) throw error;
 }
 
-export async function clockOut(employeeId: string): Promise<void> {
+export async function clockOut(employeeId: string, lateOutReason?: string): Promise<void> {
   const today = new Date().toISOString().slice(0, 10);
   const { error } = await supabase
     .from("hpm_attendance")
-    .update({ clock_out: new Date().toISOString() })
+    .update({
+      clock_out: new Date().toISOString(),
+      ...(lateOutReason ? { late_out_reason: lateOutReason } : {}),
+    })
     .eq("employee_id", employeeId)
     .eq("date", today)
     .is("clock_out", null);
+  if (error) throw error;
+}
+
+/** HR-side: decide whether a late reason needs the supervisor's sign-off. */
+export async function setNeedsSupervisorApproval(
+  attendanceId: string,
+  value: boolean,
+): Promise<void> {
+  const { error } = await supabase
+    .from("hpm_attendance")
+    .update({ needs_supervisor_approval: value })
+    .eq("id", attendanceId);
   if (error) throw error;
 }
 

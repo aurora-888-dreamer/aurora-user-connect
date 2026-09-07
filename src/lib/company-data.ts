@@ -22,6 +22,9 @@ export type CompanyProfile = {
   officeLat: number | null;
   officeLng: number | null;
   officeRadiusMeters: number;
+  /** "HH:MM" 24-hour, e.g. "09:00" — used to detect late clock-in/out. */
+  workStartTime: string;
+  workEndTime: string;
 };
 
 const DEFAULT_COMPANY: CompanyProfile = {
@@ -34,6 +37,8 @@ const DEFAULT_COMPANY: CompanyProfile = {
   officeLat: null,
   officeLng: null,
   officeRadiusMeters: 30,
+  workStartTime: "09:00",
+  workEndTime: "17:00",
 };
 
 /** Fallback used only if a read/write happens before the office radius has ever been set. */
@@ -80,7 +85,7 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
   const { data, error } = await supabase
     .from("hpm_companies")
     .select(
-      "name, address, phone, whatsapp, email, website, office_lat, office_lng, office_radius_meters",
+      "name, address, phone, whatsapp, email, website, office_lat, office_lng, office_radius_meters, work_start_time, work_end_time",
     )
     .eq("id", companyId)
     .single();
@@ -97,6 +102,8 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
     officeLat: data.office_lat,
     officeLng: data.office_lng,
     officeRadiusMeters: data.office_radius_meters ?? DEFAULT_OFFICE_RADIUS_METERS,
+    workStartTime: (data.work_start_time ?? "09:00").slice(0, 5),
+    workEndTime: (data.work_end_time ?? "17:00").slice(0, 5),
   };
 }
 
@@ -114,6 +121,8 @@ export async function saveCompanyProfile(profile: CompanyProfile): Promise<void>
       office_lat: profile.officeLat,
       office_lng: profile.officeLng,
       office_radius_meters: profile.officeRadiusMeters,
+      work_start_time: profile.workStartTime,
+      work_end_time: profile.workEndTime,
     })
     .eq("id", companyId);
 
@@ -122,6 +131,18 @@ export async function saveCompanyProfile(profile: CompanyProfile): Promise<void>
 
 export function isOfficeLocationSet(profile: CompanyProfile): boolean {
   return profile.officeLat !== null && profile.officeLng !== null;
+}
+
+/** True if `now` is more than `graceMinutes` past `scheduledTime` ("HH:MM") on the same day. */
+export function isPastSchedule(
+  scheduledTime: string,
+  graceMinutes: number,
+  now = new Date(),
+): boolean {
+  const [h, m] = scheduledTime.split(":").map(Number);
+  const scheduled = new Date(now);
+  scheduled.setHours(h ?? 0, m ?? 0, 0, 0);
+  return now.getTime() - scheduled.getTime() > graceMinutes * 60 * 1000;
 }
 
 /** Great-circle distance between two lat/lng points, in meters (Haversine formula). */
