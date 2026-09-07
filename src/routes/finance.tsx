@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { ContactListSection } from "@/components/ContactListSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -199,6 +200,8 @@ function FinancePage() {
           }}
         />
       )}
+
+      <ContactListSection />
     </AppShell>
   );
 }
@@ -249,7 +252,8 @@ function FinanceEditDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Landmark className="size-5 text-primary" /> Edit Gaji &amp; Tunjangan — {employee.fullName}
+            <Landmark className="size-5 text-primary" /> Edit Gaji &amp; Tunjangan —{" "}
+            {employee.fullName}
           </DialogTitle>
           <DialogDescription>
             Tunjangan Transport/Jabatan/Kesehatan/Asuransi adalah nominal tetap per bulan. Tunjangan

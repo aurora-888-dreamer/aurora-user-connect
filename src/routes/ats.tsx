@@ -1,6 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
+import { ContactListSection } from "@/components/ContactListSection";
 import { getActiveSession } from "@/lib/admin-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -91,6 +92,7 @@ function AtsPage() {
         <TabsList>
           <TabsTrigger value="vacancies">Job Board</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline Kandidat</TabsTrigger>
+          <TabsTrigger value="contacts">Contact List</TabsTrigger>
         </TabsList>
 
         <TabsContent value="vacancies" className="mt-6">
@@ -99,6 +101,10 @@ function AtsPage() {
 
         <TabsContent value="pipeline" className="mt-6">
           <PipelineTab vacancies={vacancies} applicants={applicants} onChange={refresh} />
+        </TabsContent>
+
+        <TabsContent value="contacts" className="mt-6">
+          <ContactListSection />
         </TabsContent>
       </Tabs>
 

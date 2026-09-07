@@ -60,6 +60,7 @@ import {
   AlertDialogTitle,
 } from "@/components/ui/alert-dialog";
 import { AttendanceFlow } from "@/components/AttendanceFlow";
+import { ContactListSection } from "@/components/ContactListSection";
 import {
   addEmployee,
   updateEmployee,
@@ -200,6 +201,7 @@ function HrisPage() {
             <TabsTrigger value="final-report">Laporan Akhir</TabsTrigger>
             <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
             <TabsTrigger value="announcements">Pengumuman</TabsTrigger>
+            <TabsTrigger value="contacts">Contact List</TabsTrigger>
             <TabsTrigger value="payroll">Payroll</TabsTrigger>
           </TabsList>
 
@@ -229,6 +231,10 @@ function HrisPage() {
 
           <TabsContent value="announcements" className="mt-6">
             <AnnouncementsTab />
+          </TabsContent>
+
+          <TabsContent value="contacts" className="mt-6">
+            <ContactListSection />
           </TabsContent>
 
           <TabsContent value="payroll" className="mt-6">
