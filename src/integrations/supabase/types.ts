@@ -26,6 +26,7 @@ export type Database = {
           is_developer: boolean
           phone_wa: string | null
           pin_hash: string
+          position: string | null
           role: string
           user_id: string
         }
@@ -40,6 +41,7 @@ export type Database = {
           is_developer?: boolean
           phone_wa?: string | null
           pin_hash: string
+          position?: string | null
           role?: string
           user_id: string
         }
@@ -54,6 +56,7 @@ export type Database = {
           is_developer?: boolean
           phone_wa?: string | null
           pin_hash?: string
+          position?: string | null
           role?: string
           user_id?: string
         }
