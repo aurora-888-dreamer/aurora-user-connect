@@ -31,6 +31,7 @@ import {
   isFinanceDirector,
   isFinanceHeadRole,
   isDeveloperAdmin,
+  isTopAdmin,
   type UserProfile,
 } from "@/lib/admin-auth";
 import {
@@ -69,7 +70,7 @@ function FinancePage() {
       return;
     }
     // Aurora developer account bypasses department restrictions entirely.
-    if (!isFinanceDept(s) && !isDeveloperAdmin(s)) {
+    if (!isFinanceDept(s) && !isDeveloperAdmin(s) && !isTopAdmin(s)) {
       toast.error("Halaman ini khusus departemen Finance.");
       navigate({ to: "/dashboard" });
       return;
@@ -95,7 +96,8 @@ function FinancePage() {
   // level, termasuk Kepala Divisi/GM/Direktur. Head Finance & Admin Finance
   // hanya melihat level Staff/Supervisor/Manager — baris level senior
   // disembunyikan total, bukan cuma dikunci editnya.
-  const seesEverything = isFinanceDirector(session) || isDeveloperAdmin(session);
+  const seesEverything =
+    isFinanceDirector(session) || isDeveloperAdmin(session) || isTopAdmin(session);
   const canEdit = seesEverything || isFinanceHeadRole(session);
   const visibleEmployees = seesEverything
     ? employees
@@ -104,11 +106,13 @@ function FinancePage() {
 
   const roleLabel = isDeveloperAdmin(session)
     ? "Admin Developer Aurora — akses penuh semua level."
-    : isFinanceDirector(session)
-      ? "Direktur — bisa lihat & atur gaji semua level, termasuk Kepala Divisi/GM."
-      : isFinanceHeadRole(session)
-        ? "Head Finance — bisa lihat & atur gaji level Staff/Supervisor/Manager. Level Kepala Divisi ke atas tidak ditampilkan."
-        : "Admin Finance — lihat data gaji, tunjangan, dan rekening level Staff/Supervisor/Manager (view only).";
+    : isTopAdmin(session)
+      ? "Top Admin — akses penuh semua level, termasuk Kepala Divisi/GM/Direktur."
+      : isFinanceDirector(session)
+        ? "Direktur — bisa lihat & atur gaji semua level, termasuk Kepala Divisi/GM."
+        : isFinanceHeadRole(session)
+          ? "Head Finance — bisa lihat & atur gaji level Staff/Supervisor/Manager. Level Kepala Divisi ke atas tidak ditampilkan."
+          : "Admin Finance — lihat data gaji, tunjangan, dan rekening level Staff/Supervisor/Manager (view only).";
 
   return (
     <AppShell title="Finance" description={roleLabel}>

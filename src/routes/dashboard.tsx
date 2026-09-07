@@ -11,9 +11,17 @@ import {
   UserProfile,
   UserRole,
 } from "@/lib/admin-auth";
+import { getEmployees, type Employee } from "@/lib/hris-data";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardComponent,
@@ -22,6 +30,7 @@ export const Route = createFileRoute("/dashboard")({
 function DashboardComponent() {
   const navigate = useNavigate();
   const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
 
   // Form State Edit Profile
   const [fullName, setFullName] = useState("");
@@ -31,11 +40,12 @@ function DashboardComponent() {
   const [oldPin, setOldPin] = useState("");
   const [newPin, setNewPin] = useState("");
 
-  // Form State Add Admin
+  // Form State Add Admin — grants admin access to an ALREADY-REGISTERED employee, doesn't create a new person.
   const [newUserId, setNewUserId] = useState("");
   const [newAdminPin, setNewAdminPin] = useState("");
-  const [newAdminName, setNewAdminName] = useState("");
+  const [newAdminEmployeeId, setNewAdminEmployeeId] = useState("");
   const [newAdminRole, setNewAdminRole] = useState<UserRole>("OPERATOR");
+  const [newAdminDepartment, setNewAdminDepartment] = useState("");
 
   useEffect(() => {
     const session = getActiveSession();
@@ -46,9 +56,15 @@ function DashboardComponent() {
     setCurrentUser(session);
     setFullName(session.fullName);
     setPhoneWA(session.phoneWA);
+    getEmployees()
+      .then(setEmployees)
+      .catch(() => setEmployees([]));
   }, [navigate]);
 
   if (!currentUser) return null;
+
+  const selectedEmployee = employees.find((e) => e.id === newAdminEmployeeId);
+  const willBeTopAdmin = selectedEmployee?.positionLevel === "Direktur";
 
   const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -85,17 +101,25 @@ function DashboardComponent() {
 
   const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
+    if (!newAdminEmployeeId) {
+      alert(
+        "Pilih karyawan dari HRIS dulu — admin cuma bisa diberikan ke orang yang sudah terdaftar.",
+      );
+      return;
+    }
     try {
       await createAdminUser({
         userId: newUserId,
         pin: newAdminPin,
-        fullName: newAdminName,
+        employeeId: newAdminEmployeeId,
         role: newAdminRole,
+        ...(newAdminDepartment ? { department: newAdminDepartment } : {}),
       });
       alert(`Pengguna baru ${newUserId.toUpperCase()} berhasil ditambahkan!`);
       setNewUserId("");
       setNewAdminPin("");
-      setNewAdminName("");
+      setNewAdminEmployeeId("");
+      setNewAdminDepartment("");
     } catch {
       alert("Gagal menambahkan pengguna. User ID mungkin sudah digunakan.");
     }
@@ -170,6 +194,37 @@ function DashboardComponent() {
           </CardHeader>
           <CardContent>
             <form onSubmit={handleAddAdmin} className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <label className="text-sm">Karyawan (dari HRIS)</label>
+                <Select value={newAdminEmployeeId} onValueChange={setNewAdminEmployeeId}>
+                  <SelectTrigger>
+                    <SelectValue placeholder="Pilih karyawan yang sudah terdaftar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground">
+                        Belum ada karyawan — daftarkan dulu di Core HRIS.
+                      </div>
+                    ) : (
+                      employees.map((e) => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {e.fullName} — {e.position || e.department || "belum ada jabatan"}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Akses admin cuma bisa diberikan ke orang yang sudah lengkap datanya di HRIS —
+                  nama, departemen, dan jabatan otomatis ikut data karyawannya, tidak diketik ulang.
+                </p>
+                {selectedEmployee && (
+                  <p className="mt-2 text-xs">
+                    {selectedEmployee.department || "—"} · {selectedEmployee.position || "—"} ·
+                    Level: {selectedEmployee.positionLevel}
+                  </p>
+                )}
+              </div>
               <div>
                 <label className="text-sm">User ID Baru</label>
                 <Input
@@ -190,24 +245,32 @@ function DashboardComponent() {
                 />
               </div>
               <div>
-                <label className="text-sm">Nama Lengkap</label>
-                <Input
-                  value={newAdminName}
-                  onChange={(e) => setNewAdminName(e.target.value)}
-                  required
-                />
+                <label className="text-sm">Pilih Role</label>
+                {willBeTopAdmin ? (
+                  <p className="rounded-md border border-primary/40 bg-primary/10 p-2 text-sm text-primary">
+                    Otomatis jadi <strong>TOP ADMIN</strong> — level jabatan Direktur, akses penuh
+                    ke semua modul kecuali Dev Console.
+                  </p>
+                ) : (
+                  <select
+                    value={newAdminRole}
+                    onChange={(e) => setNewAdminRole(e.target.value as UserRole)}
+                    className="w-full rounded-md border border-input bg-background p-2 text-sm"
+                  >
+                    <option value="SUPER_ADMIN">SUPER ADMIN</option>
+                    <option value="ADMIN">ADMIN</option>
+                    <option value="OPERATOR">OPERATOR</option>
+                  </select>
+                )}
               </div>
               <div>
-                <label className="text-sm">Pilih Role (3 Pilihan)</label>
-                <select
-                  value={newAdminRole}
-                  onChange={(e) => setNewAdminRole(e.target.value as UserRole)}
-                  className="w-full rounded-md border border-input bg-background p-2 text-sm"
-                >
-                  <option value="SUPER_ADMIN">SUPER ADMIN</option>
-                  <option value="ADMIN">ADMIN</option>
-                  <option value="OPERATOR">OPERATOR</option>
-                </select>
+                <label className="text-sm">Departemen Akses (opsional)</label>
+                <Input
+                  value={newAdminDepartment}
+                  onChange={(e) => setNewAdminDepartment(e.target.value)}
+                  placeholder='Isi "Finance" untuk akses modul Finance'
+                  disabled={willBeTopAdmin}
+                />
               </div>
               <div className="md:col-span-2">
                 <Button type="submit" className="w-full">
