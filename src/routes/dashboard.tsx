@@ -5,8 +5,9 @@ import { AppShell } from "@/components/AppShell";
 import {
   getActiveSession,
   setActiveSession,
-  getStoredUsers,
-  saveUsers,
+  updateAdminProfile,
+  changeAdminPin,
+  createAdminUser,
   UserProfile,
   UserRole,
 } from "@/lib/aurora-id";
