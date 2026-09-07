@@ -137,20 +137,19 @@ function FinancePage() {
                 <TableHead>Jabatan</TableHead>
                 <TableHead>Level</TableHead>
                 <TableHead>Gaji Pokok</TableHead>
-                <TableHead>Total Tunjangan</TableHead>
+                <TableHead>Tunjangan Tetap/Bulan</TableHead>
+                <TableHead>Tunjangan Makan</TableHead>
                 <TableHead>Rekening Bank</TableHead>
                 {canEdit && <TableHead />}
               </TableRow>
             </TableHeader>
             <TableBody>
               {visibleEmployees.map((e) => {
-                const totalAllowance =
+                const fixedMonthlyAllowance =
                   (e.transportAllowance ?? 0) +
-                  (e.mealAllowance ?? 0) +
                   (e.positionAllowance ?? 0) +
                   (e.healthAllowance ?? 0) +
-                  (e.insuranceAllowance ?? 0) +
-                  (e.pensionContribution ?? 0);
+                  (e.insuranceAllowance ?? 0);
                 return (
                   <TableRow key={e.id}>
                     <TableCell>{e.fullName}</TableCell>
@@ -159,7 +158,10 @@ function FinancePage() {
                       <Badge variant="secondary">{e.positionLevel}</Badge>
                     </TableCell>
                     <TableCell>{rupiah(e.basicSalary ?? 0)}</TableCell>
-                    <TableCell>{rupiah(totalAllowance)}</TableCell>
+                    <TableCell>{rupiah(fixedMonthlyAllowance)}</TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {rupiah(e.mealAllowance ?? 0)}/hari
+                    </TableCell>
                     <TableCell className="text-xs">
                       {e.bankName ? (
                         <>
@@ -218,7 +220,6 @@ function FinanceEditDialog({
     healthAllowance: String(employee.healthAllowance ?? 0),
     insuranceAllowance: String(employee.insuranceAllowance ?? 0),
     overtimeRatePerHour: String(employee.overtimeRatePerHour ?? 0),
-    pensionContribution: String(employee.pensionContribution ?? 0),
   });
   const [submitting, setSubmitting] = useState(false);
 
@@ -233,7 +234,6 @@ function FinanceEditDialog({
         healthAllowance: Number(form.healthAllowance) || 0,
         insuranceAllowance: Number(form.insuranceAllowance) || 0,
         overtimeRatePerHour: Number(form.overtimeRatePerHour) || 0,
-        pensionContribution: Number(form.pensionContribution) || 0,
       });
       toast.success(`Gaji & tunjangan ${employee.fullName} diperbarui.`);
       onSaved();
@@ -249,11 +249,14 @@ function FinanceEditDialog({
       <DialogContent className="sm:max-w-lg">
         <DialogHeader>
           <DialogTitle className="flex items-center gap-2">
-            <Landmark className="size-5 text-primary" /> {employee.fullName}
+            <Landmark className="size-5 text-primary" /> Edit Gaji &amp; Tunjangan — {employee.fullName}
           </DialogTitle>
           <DialogDescription>
-            BPJS, PPh 21, dan pensiun wajib tetap dihitung otomatis pakai formula pemerintah (bukan
-            diisi manual di sini). Bonus kinerja dihitung terpisah — belum di sini.
+            Tunjangan Transport/Jabatan/Kesehatan/Asuransi adalah nominal tetap per bulan. Tunjangan
+            Makan adalah tarif per HARI HADIR — dikalikan otomatis saat payroll dibuat, jangan isi
+            nominal sebulan penuh di sini. JHT (persentase) dan formula pensiun diatur di menu
+            Pengaturan, berlaku untuk semua karyawan. Bonus &amp; denda diisi per periode payroll,
+            bukan di sini.
           </DialogDescription>
         </DialogHeader>
         <div className="grid gap-4 sm:grid-cols-2">
@@ -267,7 +270,7 @@ function FinanceEditDialog({
             />
           </div>
           <div>
-            <Label>Tunjangan Transport (Rp)</Label>
+            <Label>Tunjangan Transport (Rp/bulan)</Label>
             <Input
               type="number"
               className="mt-2"
@@ -276,16 +279,17 @@ function FinanceEditDialog({
             />
           </div>
           <div>
-            <Label>Tunjangan Makan (Rp)</Label>
+            <Label>Tunjangan Makan (Rp/hari hadir)</Label>
             <Input
               type="number"
               className="mt-2"
               value={form.mealAllowance}
               onChange={(e) => setForm({ ...form, mealAllowance: e.target.value })}
+              placeholder="25000"
             />
           </div>
           <div>
-            <Label>Tunjangan Jabatan (Rp)</Label>
+            <Label>Tunjangan Jabatan (Rp/bulan)</Label>
             <Input
               type="number"
               className="mt-2"
@@ -294,7 +298,7 @@ function FinanceEditDialog({
             />
           </div>
           <div>
-            <Label>Tunjangan Kesehatan (Rp)</Label>
+            <Label>Tunjangan Kesehatan (Rp/bulan)</Label>
             <Input
               type="number"
               className="mt-2"
@@ -303,7 +307,7 @@ function FinanceEditDialog({
             />
           </div>
           <div>
-            <Label>Tunjangan Asuransi (Rp)</Label>
+            <Label>Tunjangan Asuransi (Rp/bulan)</Label>
             <Input
               type="number"
               className="mt-2"
@@ -318,15 +322,6 @@ function FinanceEditDialog({
               className="mt-2"
               value={form.overtimeRatePerHour}
               onChange={(e) => setForm({ ...form, overtimeRatePerHour: e.target.value })}
-            />
-          </div>
-          <div>
-            <Label>Kontribusi Pensiun (Rp)</Label>
-            <Input
-              type="number"
-              className="mt-2"
-              value={form.pensionContribution}
-              onChange={(e) => setForm({ ...form, pensionContribution: e.target.value })}
             />
           </div>
         </div>
