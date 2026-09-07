@@ -19,6 +19,7 @@ export type Database = {
           pin_hash: string;
           role: string;
           department: string | null;
+          is_developer: boolean;
           user_id: string;
         };
         Insert: {
@@ -31,6 +32,7 @@ export type Database = {
           pin_hash: string;
           role?: string;
           department?: string | null;
+          is_developer?: boolean;
           user_id: string;
         };
         Update: {
@@ -43,6 +45,7 @@ export type Database = {
           pin_hash?: string;
           role?: string;
           department?: string | null;
+          is_developer?: boolean;
           user_id?: string;
         };
         Relationships: [
