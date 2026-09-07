@@ -1,11 +1,10 @@
 // src/routes/index.tsx
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { getActiveSession, getStoredUsers, setActiveSession } from "@/lib/aurora-id";
+import { getActiveSession, findAdminByCredentials, setActiveSession } from "@/lib/aurora-id";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 export const Route = createFileRoute("/")({
   component: LoginComponent,
