@@ -1796,6 +1796,8 @@ function LocationsTab() {
     name: "",
     type: "Cabang" as LocationType,
     address: "",
+    phone: "",
+    parentLocationId: "",
     lat: "",
     lng: "",
     radiusMeters: "30",
@@ -1813,8 +1815,17 @@ function LocationsTab() {
 
   useEffect(refresh, []);
 
-  const openNew = () => {
-    setForm({ name: "", type: "Cabang", address: "", lat: "", lng: "", radiusMeters: "30" });
+  const openNew = (parentLocationId?: string) => {
+    setForm({
+      name: "",
+      type: parentLocationId ? "Toko" : "Cabang",
+      address: "",
+      phone: "",
+      parentLocationId: parentLocationId ?? "",
+      lat: "",
+      lng: "",
+      radiusMeters: "30",
+    });
     setEditing("new");
   };
 
@@ -1823,6 +1834,8 @@ function LocationsTab() {
       name: loc.name,
       type: loc.type,
       address: loc.address,
+      phone: loc.phone,
+      parentLocationId: loc.parentLocationId ?? "",
       lat: loc.lat !== null ? String(loc.lat) : "",
       lng: loc.lng !== null ? String(loc.lng) : "",
       radiusMeters: String(loc.radiusMeters),
@@ -1863,6 +1876,8 @@ function LocationsTab() {
         name: form.name.trim(),
         type: form.type,
         address: form.address,
+        phone: form.phone,
+        ...(form.parentLocationId ? { parentLocationId: form.parentLocationId } : {}),
         lat: form.lat ? Number(form.lat) : null,
         lng: form.lng ? Number(form.lng) : null,
         radiusMeters: Number(form.radiusMeters) || 30,
@@ -1890,10 +1905,64 @@ function LocationsTab() {
       refresh();
     } catch {
       toast.error(
-        "Gagal menghapus. Pastikan tidak ada karyawan yang masih di-assign ke lokasi ini.",
+        "Gagal menghapus. Pastikan tidak ada karyawan atau sub-lokasi yang masih terhubung ke lokasi ini.",
       );
     }
   };
+
+  const topLevel = items.filter((l) => !l.parentLocationId);
+  const childrenOf = (parentId: string) => items.filter((l) => l.parentLocationId === parentId);
+
+  // Parent options exclude the location being edited itself (can't be its own parent).
+  const parentOptions = items.filter(
+    (l) => l !== editing && l.id !== (editing !== "new" ? editing?.id : ""),
+  );
+
+  const LocationCard = ({ loc, isChild }: { loc: WorkLocation; isChild?: boolean }) => (
+    <div className={isChild ? "ml-6 border-l-2 border-border pl-4" : ""}>
+      <div className="flex items-center justify-between rounded-lg border border-border p-3">
+        <div>
+          <div className="flex items-center gap-2">
+            <p className="font-medium">{loc.name}</p>
+            <Badge variant="secondary">{loc.type}</Badge>
+          </div>
+          <p className="mt-1 text-xs text-muted-foreground">
+            {loc.address || "Alamat belum diisi"}
+            {loc.phone ? ` · ${loc.phone}` : ""}
+          </p>
+          <p className="mt-1 font-mono text-xs text-muted-foreground">
+            {loc.lat !== null
+              ? `${loc.lat.toFixed(5)}, ${loc.lng?.toFixed(5)}`
+              : "GPS belum diatur"}{" "}
+            · radius {loc.radiusMeters}m
+          </p>
+        </div>
+        <div className="flex gap-1.5">
+          <Button
+            size="sm"
+            variant="outline"
+            onClick={() => openNew(loc.id)}
+            title="Tambah Sub-Lokasi"
+          >
+            <UserPlus className="size-3.5" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => openEdit(loc)}>
+            <Pencil className="size-3.5" />
+          </Button>
+          <Button size="sm" variant="outline" onClick={() => handleDelete(loc.id)}>
+            <Trash2 className="size-3.5" />
+          </Button>
+        </div>
+      </div>
+      {childrenOf(loc.id).length > 0 && (
+        <div className="mt-2 space-y-2">
+          {childrenOf(loc.id).map((child) => (
+            <LocationCard key={child.id} loc={child} isChild />
+          ))}
+        </div>
+      )}
+    </div>
+  );
 
   return (
     <div className="space-y-6">
@@ -1902,54 +1971,25 @@ function LocationsTab() {
           <h3 className="text-base font-semibold">Cabang / Toko / Gudang / Pabrik</h3>
           <p className="mt-1 text-sm text-muted-foreground">
             Tiap lokasi punya titik GPS &amp; radius sendiri sebagai basis absensi karyawan yang
-            di-assign ke situ. Kantor Pusat (menu Pengaturan) tetap jadi default kalau karyawan
-            tidak di-assign ke lokasi manapun.
+            di-assign ke situ. Cabang bisa punya Sub-Cabang/Toko/Gudang di dalamnya — pakai tombol{" "}
+            <UserPlus className="inline size-3.5" /> di tiap lokasi. Kantor Pusat (menu Pengaturan)
+            tetap jadi default kalau karyawan tidak di-assign ke lokasi manapun.
           </p>
         </div>
-        <Button onClick={openNew}>
+        <Button onClick={() => openNew()}>
           <MapPinned className="size-4" /> Tambah Lokasi
         </Button>
       </div>
 
-      <section className="glass-panel overflow-hidden">
+      <section className="space-y-3">
         {loading ? (
-          <p className="p-7 text-sm text-muted-foreground">Memuat…</p>
-        ) : items.length === 0 ? (
-          <p className="p-7 text-sm text-muted-foreground">Belum ada lokasi tambahan.</p>
+          <p className="glass-panel p-7 text-sm text-muted-foreground">Memuat…</p>
+        ) : topLevel.length === 0 ? (
+          <p className="glass-panel p-7 text-sm text-muted-foreground">
+            Belum ada lokasi tambahan.
+          </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Tipe</TableHead>
-                <TableHead>Titik GPS</TableHead>
-                <TableHead>Radius</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {items.map((l) => (
-                <TableRow key={l.id}>
-                  <TableCell>{l.name}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{l.type}</Badge>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">
-                    {l.lat !== null ? `${l.lat.toFixed(5)}, ${l.lng?.toFixed(5)}` : "Belum diatur"}
-                  </TableCell>
-                  <TableCell>{l.radiusMeters}m</TableCell>
-                  <TableCell className="flex gap-1.5">
-                    <Button size="sm" variant="outline" onClick={() => openEdit(l)}>
-                      <Pencil className="size-3.5" />
-                    </Button>
-                    <Button size="sm" variant="outline" onClick={() => handleDelete(l.id)}>
-                      <Trash2 className="size-3.5" />
-                    </Button>
-                  </TableCell>
-                </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+          topLevel.map((loc) => <LocationCard key={loc.id} loc={loc} />)
         )}
       </section>
 
@@ -1989,12 +2029,45 @@ function LocationsTab() {
               </div>
             </div>
             <div>
-              <Label>Alamat</Label>
-              <Input
-                className="mt-2"
-                value={form.address}
-                onChange={(e) => setForm({ ...form, address: e.target.value })}
-              />
+              <Label>Lokasi Induk (opsional)</Label>
+              <Select
+                value={form.parentLocationId || "none"}
+                onValueChange={(v) => setForm({ ...form, parentLocationId: v === "none" ? "" : v })}
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Tidak ada — lokasi utama" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Tidak ada — lokasi utama</SelectItem>
+                  {parentOptions.map((l) => (
+                    <SelectItem key={l.id} value={l.id}>
+                      {l.name} ({l.type})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="mt-1 text-xs text-muted-foreground">
+                Pilih Cabang induknya kalau ini Sub-Cabang/Toko/Gudang di dalam cabang tertentu.
+              </p>
+            </div>
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Alamat</Label>
+                <Input
+                  className="mt-2"
+                  value={form.address}
+                  onChange={(e) => setForm({ ...form, address: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Nomor Telepon</Label>
+                <Input
+                  className="mt-2"
+                  value={form.phone}
+                  onChange={(e) => setForm({ ...form, phone: e.target.value })}
+                  placeholder="021xxxxxxx"
+                />
+              </div>
             </div>
             <div className="grid gap-4 sm:grid-cols-3">
               <div>
@@ -2377,9 +2450,12 @@ function PayrollTab({
 }) {
   const [selected, setSelected] = useState<string>(employees[0]?.id ?? "");
   const [cutoffDay, setCutoffDay] = useState(1);
+  const [jhtRatePercent, setJhtRatePercent] = useState(1);
   const [period, setPeriod] = useState<{ start: string; end: string; label: string } | null>(null);
   const [summary, setSummary] = useState<AttendanceSummary | null>(null);
   const [loadingSummary, setLoadingSummary] = useState(false);
+  const [bonus, setBonus] = useState("0");
+  const [penalty, setPenalty] = useState("0");
 
   useEffect(() => {
     if (!selected && employees.length > 0) setSelected(employees[0]!.id);
@@ -2389,6 +2465,7 @@ function PayrollTab({
     getCompanyProfile()
       .then((c) => {
         setCutoffDay(c.payrollCutoffDay);
+        setJhtRatePercent(c.jhtRatePercent);
         setPeriod(getPreviousPayrollPeriod(c.payrollCutoffDay));
       })
       .catch(() => toast.error("Gagal memuat pengaturan periode payroll."));
@@ -2418,6 +2495,9 @@ function PayrollTab({
           period: period.label,
           presentDays: summary.presentDays,
           overtimeHours: summary.totalOvertimeHours,
+          jhtRatePercent,
+          bonus: Number(bonus) || 0,
+          penalty: Number(penalty) || 0,
         })
       : null;
 
@@ -2434,7 +2514,8 @@ function PayrollTab({
         <h3 className="text-base font-semibold">Kalkulator Payroll — PPh 21 TER &amp; BPJS</h3>
         <p className="mt-1 text-sm text-muted-foreground">
           Tunjangan makan dan lembur dihitung otomatis dari kehadiran beneran (lihat tab Laporan
-          Akhir) — bukan input manual. Periode potong tanggal {cutoffDay} (atur di Pengaturan).
+          Akhir) — bukan input manual. Periode potong tanggal {cutoffDay}, JHT {jhtRatePercent}%
+          dari gaji pokok (keduanya diatur di menu Pengaturan).
         </p>
         {employees.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">
@@ -2501,20 +2582,69 @@ function PayrollTab({
                   value={loadingSummary ? "…" : `${summary?.totalOvertimeHours ?? 0} jam`}
                 />
               </div>
+              <div>
+                <Label>Bonus (Rp) +</Label>
+                <Input
+                  type="number"
+                  className="mt-2"
+                  value={bonus}
+                  onChange={(e) => setBonus(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
+              <div>
+                <Label>Denda (Rp) −</Label>
+                <Input
+                  type="number"
+                  className="mt-2"
+                  value={penalty}
+                  onChange={(e) => setPenalty(e.target.value)}
+                  placeholder="0"
+                />
+              </div>
             </div>
 
             {preview && (
-              <div className="mt-6 grid gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5 sm:grid-cols-4">
-                <Stat
-                  label="Gaji Bruto"
-                  value={rupiah(preview.basicSalary + preview.allowances + preview.overtimePay)}
-                />
-                <Stat label="PPh 21 TER" value={`- ${rupiah(preview.pph21Amount)}`} />
-                <Stat
-                  label="BPJS + JHT"
-                  value={`- ${rupiah(preview.bpjsHealthEmp + preview.bpjsTkEmp + preview.jhtDeduction)}`}
-                />
-                <Stat label="Gaji Bersih (Net)" value={rupiah(preview.netSalary)} highlight />
+              <div className="mt-6 space-y-4">
+                <div className="rounded-xl border border-border p-4 text-sm">
+                  <p className="mb-2 font-medium">Rincian Tunjangan — dari mana angkanya:</p>
+                  <ul className="space-y-1 text-muted-foreground">
+                    <li>Transport (tetap/bulan): {rupiah(preview.allowanceBreakdown.transport)}</li>
+                    <li>Jabatan (tetap/bulan): {rupiah(preview.allowanceBreakdown.position)}</li>
+                    <li>Kesehatan (tetap/bulan): {rupiah(preview.allowanceBreakdown.health)}</li>
+                    <li>Asuransi (tetap/bulan): {rupiah(preview.allowanceBreakdown.insurance)}</li>
+                    <li>
+                      Makan: {rupiah(preview.allowanceBreakdown.mealRate)}/hari ×{" "}
+                      {preview.allowanceBreakdown.mealDays} hari hadir ={" "}
+                      {rupiah(preview.allowanceBreakdown.mealTotal)}
+                    </li>
+                    <li className="pt-1 font-medium text-foreground">
+                      Total Tunjangan: {rupiah(preview.allowances)}
+                    </li>
+                  </ul>
+                </div>
+
+                <div className="grid gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5 sm:grid-cols-3">
+                  <Stat
+                    label="Gaji Bruto"
+                    value={rupiah(
+                      preview.basicSalary +
+                        preview.allowances +
+                        preview.overtimePay +
+                        preview.bonus,
+                    )}
+                  />
+                  <Stat label="PPh 21 TER" value={`- ${rupiah(preview.pph21Amount)}`} />
+                  <Stat
+                    label={`BPJS + JHT (${preview.jhtRatePercent}%)`}
+                    value={`- ${rupiah(preview.bpjsHealthEmp + preview.bpjsTkEmp + preview.jhtDeduction)}`}
+                  />
+                  {preview.bonus > 0 && <Stat label="Bonus" value={`+ ${rupiah(preview.bonus)}`} />}
+                  {preview.penalty > 0 && (
+                    <Stat label="Denda" value={`- ${rupiah(preview.penalty)}`} />
+                  )}
+                  <Stat label="Gaji Bersih (Net)" value={rupiah(preview.netSalary)} highlight />
+                </div>
               </div>
             )}
 
