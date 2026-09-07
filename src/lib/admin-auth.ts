@@ -10,6 +10,8 @@ import { getOrCreateCompanyId } from "@/lib/company-data";
 export type UserRole = "SUPER_ADMIN" | "ADMIN" | "OPERATOR";
 
 export interface UserProfile {
+  /** Internal UUID (hpm_admin_users.id) — used for FK references like the shared Contact List, not for login. */
+  id: string;
   userId: string;
   fullName: string;
   phoneWA: string;
@@ -51,6 +53,7 @@ async function hashPin(pin: string): Promise<string> {
 }
 
 type AdminRow = {
+  id: string;
   user_id: string;
   full_name: string;
   phone_wa: string | null;
@@ -61,6 +64,7 @@ type AdminRow = {
 
 function toProfile(row: AdminRow): UserProfile {
   return {
+    id: row.id,
     userId: row.user_id,
     fullName: row.full_name,
     phoneWA: row.phone_wa ?? "",
@@ -73,7 +77,7 @@ function toProfile(row: AdminRow): UserProfile {
 export async function listAdminUsers(): Promise<UserProfile[]> {
   const { data, error } = await supabase
     .from("hpm_admin_users")
-    .select("user_id, full_name, phone_wa, role, department, is_developer")
+    .select("id, user_id, full_name, phone_wa, role, department, is_developer")
     .eq("is_active", true)
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -86,7 +90,7 @@ export async function findAdminByCredentials(
 ): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from("hpm_admin_users")
-    .select("user_id, full_name, phone_wa, role, department, is_developer, pin_hash")
+    .select("id, user_id, full_name, phone_wa, role, department, is_developer, pin_hash")
     .ilike("user_id", userId.trim())
     .eq("is_active", true)
     .maybeSingle();
@@ -145,7 +149,7 @@ export async function createAdminUser(input: {
       department: input.department || null,
       is_active: true,
     })
-    .select("user_id, full_name, phone_wa, role, department")
+    .select("id, user_id, full_name, phone_wa, role, department")
     .single();
   if (error) throw error;
   return toProfile(data as AdminRow);
