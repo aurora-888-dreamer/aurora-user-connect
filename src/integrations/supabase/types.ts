@@ -174,6 +174,11 @@ export type Database = {
           long_in: string | null;
           outside_location_note: string | null;
           outside_task_status: string | null;
+          lat_out: string | null;
+          long_out: string | null;
+          distance_out_meters: number | null;
+          is_outside_office_out: boolean | null;
+          outside_location_note_out: string | null;
           photo_url: string | null;
           status: string | null;
         };
@@ -193,6 +198,11 @@ export type Database = {
           long_in?: string | null;
           outside_location_note?: string | null;
           outside_task_status?: string | null;
+          lat_out?: string | null;
+          long_out?: string | null;
+          distance_out_meters?: number | null;
+          is_outside_office_out?: boolean | null;
+          outside_location_note_out?: string | null;
           photo_url?: string | null;
           status?: string | null;
         };
@@ -212,6 +222,11 @@ export type Database = {
           long_in?: string | null;
           outside_location_note?: string | null;
           outside_task_status?: string | null;
+          lat_out?: string | null;
+          long_out?: string | null;
+          distance_out_meters?: number | null;
+          is_outside_office_out?: boolean | null;
+          outside_location_note_out?: string | null;
           photo_url?: string | null;
           status?: string | null;
         };
@@ -228,6 +243,126 @@ export type Database = {
             columns: ["employee_id"];
             isOneToOne: false;
             referencedRelation: "hpm_employees";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      hpm_chat_conversations: {
+        Row: {
+          id: string;
+          company_id: string;
+          type: string;
+          name: string | null;
+          direct_key: string | null;
+          created_by_type: string | null;
+          created_by_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          type: string;
+          name?: string | null;
+          direct_key?: string | null;
+          created_by_type?: string | null;
+          created_by_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          type?: string;
+          name?: string | null;
+          direct_key?: string | null;
+          created_by_type?: string | null;
+          created_by_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hpm_chat_conversations_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      hpm_chat_participants: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          participant_type: string;
+          participant_id: string;
+          participant_user_id: string;
+          participant_name: string;
+          joined_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          participant_type: string;
+          participant_id: string;
+          participant_user_id: string;
+          participant_name: string;
+          joined_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          participant_type?: string;
+          participant_id?: string;
+          participant_user_id?: string;
+          participant_name?: string;
+          joined_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hpm_chat_participants_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_chat_conversations";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      hpm_chat_messages: {
+        Row: {
+          id: string;
+          conversation_id: string;
+          sender_type: string;
+          sender_id: string;
+          sender_user_id: string;
+          sender_name: string;
+          body: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          conversation_id: string;
+          sender_type: string;
+          sender_id: string;
+          sender_user_id: string;
+          sender_name: string;
+          body: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          conversation_id?: string;
+          sender_type?: string;
+          sender_id?: string;
+          sender_user_id?: string;
+          sender_name?: string;
+          body?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hpm_chat_messages_conversation_id_fkey";
+            columns: ["conversation_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_chat_conversations";
             referencedColumns: ["id"];
           },
         ];
