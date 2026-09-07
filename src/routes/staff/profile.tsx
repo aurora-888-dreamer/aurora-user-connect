@@ -41,6 +41,7 @@ function StaffProfilePage() {
 
   const [ktpFileUrl, setKtpFileUrl] = useState<string | null>(null);
   const [ktpBusy, setKtpBusy] = useState(false);
+  const [ktpErrorMessage, setKtpErrorMessage] = useState<string | null>(null);
   const [ktpPreview, setKtpPreview] = useState<{
     dataUrl: string;
     extracted: KtpExtracted | null;
@@ -77,42 +78,52 @@ function StaffProfilePage() {
     }
   };
 
-  const handleKtpFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const processKtpDataUrl = async (dataUrl: string) => {
+    setKtpBusy(true);
+    setKtpPreview(null);
+    setKtpErrorMessage(null);
+    try {
+      // Preview only — nothing is saved to the account/HRIS yet.
+      const { extracted } = await readKtpPhoto(dataUrl);
+      if (!extracted) {
+        setKtpPreview({ dataUrl, extracted: null, match: false });
+        toast.error("AI tidak menemukan KTP yang bisa dibaca di foto ini. Coba foto ulang.");
+        return;
+      }
+      const employee = account.employeeId ? await getEmployeeById(account.employeeId) : null;
+      const match = niksMatch(extracted.nik, employee?.nik);
+      setKtpPreview({ dataUrl, extracted, match });
+      if (!match) {
+        toast.error(
+          "NIK di foto KTP tidak cocok dengan data karyawan. Silakan ambil ulang foto yang benar.",
+        );
+      }
+    } catch (err) {
+      // A real failure (network/deployment/AI Gateway) — NOT the same as "photo
+      // unreadable", so show the actual message instead of blaming lighting.
+      const message = err instanceof Error ? err.message : "Gagal memproses KTP. Coba lagi.";
+      setKtpErrorMessage(message);
+      setKtpPreview({ dataUrl, extracted: null, match: false });
+      toast.error(message);
+    } finally {
+      setKtpBusy(false);
+    }
+  };
+
+  const handleKtpFileChosen = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = "";
     if (!file) return;
-
     const reader = new FileReader();
-    reader.onload = async () => {
-      const dataUrl = reader.result as string;
-      setKtpBusy(true);
-      setKtpPreview(null);
-      try {
-        // Preview only — nothing is saved to the account/HRIS yet.
-        const { extracted } = await readKtpPhoto(dataUrl);
-        if (!extracted) {
-          toast.error(
-            "Foto tidak terbaca sebagai KTP. Coba foto ulang, pastikan cahaya cukup & teks jelas.",
-          );
-          setKtpPreview({ dataUrl, extracted: null, match: false });
-          return;
-        }
-        const employee = account.employeeId ? await getEmployeeById(account.employeeId) : null;
-        const match = niksMatch(extracted.nik, employee?.nik);
-        setKtpPreview({ dataUrl, extracted, match });
-        if (!match) {
-          toast.error(
-            "NIK di foto KTP tidak cocok dengan data karyawan. Silakan ambil ulang foto yang benar.",
-          );
-        }
-      } catch {
-        toast.error("Gagal membaca KTP lewat AI. Coba lagi sebentar.");
-        setKtpPreview({ dataUrl, extracted: null, match: false });
-      } finally {
-        setKtpBusy(false);
-      }
-    };
+    reader.onload = () => processKtpDataUrl(reader.result as string);
     reader.readAsDataURL(file);
+  };
+
+  /** Re-runs AI OCR on the photo already saved/previewed — no need to retake or reselect a file. */
+  const handleReprocessExisting = () => {
+    const dataUrl = ktpPreview?.dataUrl ?? ktpFileUrl;
+    if (!dataUrl) return;
+    processKtpDataUrl(dataUrl);
   };
 
   const handleConfirmKtp = async () => {
@@ -142,6 +153,7 @@ function StaffProfilePage() {
 
   const handleRetakeKtp = () => {
     setKtpPreview(null);
+    setKtpErrorMessage(null);
     ktpInputRef.current?.click();
   };
 
@@ -262,19 +274,37 @@ function StaffProfilePage() {
               )}
             </div>
 
-            <Button
-              className="w-full"
-              variant="outline"
-              disabled={ktpBusy}
-              onClick={() => ktpInputRef.current?.click()}
-            >
-              {ktpBusy ? (
-                <Loader2 className="size-4 animate-spin" />
-              ) : (
-                <Upload className="size-4" />
+            <div className="flex gap-2">
+              <Button
+                className="flex-1"
+                variant="outline"
+                disabled={ktpBusy}
+                onClick={() => ktpInputRef.current?.click()}
+              >
+                {ktpBusy ? (
+                  <Loader2 className="size-4 animate-spin" />
+                ) : (
+                  <Upload className="size-4" />
+                )}
+                {ktpFileUrl ? "Ganti Foto" : "Ambil / Unggah Foto KTP"}
+              </Button>
+              {ktpFileUrl && (
+                <Button
+                  className="flex-1"
+                  variant="outline"
+                  disabled={ktpBusy}
+                  onClick={handleReprocessExisting}
+                  title="Baca ulang foto yang sudah ada tanpa perlu foto baru"
+                >
+                  {ktpBusy ? (
+                    <Loader2 className="size-4 animate-spin" />
+                  ) : (
+                    <RotateCcw className="size-4" />
+                  )}
+                  Proses Ulang dengan AI
+                </Button>
               )}
-              {ktpFileUrl ? "Ganti Foto KTP" : "Ambil / Unggah Foto KTP"}
-            </Button>
+            </div>
 
             {account.ktpExtracted && (
               <div className="space-y-2 rounded-xl border border-border p-4 text-sm">
@@ -351,8 +381,10 @@ function StaffProfilePage() {
 
             {!ktpBusy && !ktpPreview.extracted && (
               <p className="flex items-center gap-1.5 text-sm text-destructive">
-                <AlertTriangle className="size-4" /> Foto tidak terbaca sebagai KTP. Ambil ulang
-                dengan pencahayaan yang lebih baik.
+                <AlertTriangle className="size-4" />
+                {ktpErrorMessage
+                  ? ktpErrorMessage
+                  : "AI tidak menemukan KTP yang bisa dibaca di foto ini. Coba foto ulang dengan pencahayaan yang lebih baik."}
               </p>
             )}
 
@@ -363,8 +395,19 @@ function StaffProfilePage() {
                 onClick={handleRetakeKtp}
                 disabled={ktpBusy}
               >
-                <RotateCcw className="size-4" /> Ambil Ulang
+                <RotateCcw className="size-4" /> Ambil Foto Baru
               </Button>
+              {!ktpPreview.extracted && (
+                <Button
+                  variant="outline"
+                  className="flex-1"
+                  onClick={handleReprocessExisting}
+                  disabled={ktpBusy}
+                  title="Coba baca ulang foto yang sama, tanpa ambil foto baru"
+                >
+                  {ktpBusy ? "Memproses…" : "Coba Lagi (Foto Sama)"}
+                </Button>
+              )}
               {ktpPreview.match && (
                 <Button className="flex-1" onClick={handleConfirmKtp} disabled={ktpBusy}>
                   {ktpBusy ? "Menyimpan…" : "Konfirmasi & Simpan"}
