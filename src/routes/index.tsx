@@ -1,11 +1,10 @@
 // src/routes/index.tsx
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { getActiveSession, getStoredUsers, setActiveSession } from "@/lib/aurora-id";
+import { getActiveSession, findAdminByCredentials, setActiveSession } from "@/lib/aurora-id";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import { InputOTP, InputOTPGroup, InputOTPSlot } from "@/components/ui/input-otp";
 
 export const Route = createFileRoute("/")({
   component: LoginComponent,
@@ -16,6 +15,7 @@ function LoginComponent() {
   const [userId, setUserId] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // Already logged in on this device/session — skip the login form and go
   // straight to the Dashboard instead of showing it again.
@@ -25,20 +25,22 @@ function LoginComponent() {
     }
   }, [navigate]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    const users = getStoredUsers();
-    const user = users.find(
-      (u) => u.userId.toUpperCase() === userId.trim().toUpperCase() && u.pin === pin,
-    );
-
-    if (user) {
-      setActiveSession(user);
-      navigate({ to: "/dashboard" });
-    } else {
-      setError("User ID atau PIN 6 digit salah!");
+    setSubmitting(true);
+    try {
+      const user = await findAdminByCredentials(userId, pin);
+      if (user) {
+        setActiveSession(user);
+        navigate({ to: "/dashboard" });
+      } else {
+        setError("User ID atau PIN 6 digit salah!");
+      }
+    } catch {
+      setError("Gagal menghubungi server. Periksa koneksi internet Anda.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
@@ -68,18 +70,16 @@ function LoginComponent() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">PIN (6 Digit)</label>
-              <div className="flex justify-center">
-                <InputOTP maxLength={6} value={pin} onChange={(val) => setPin(val)}>
-                  <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
-                  </InputOTPGroup>
-                </InputOTP>
-              </div>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                required
+                className="border-slate-700 bg-slate-900 tracking-[0.4em]"
+                placeholder="••••••"
+              />
             </div>
             <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-500">
               Masuk
