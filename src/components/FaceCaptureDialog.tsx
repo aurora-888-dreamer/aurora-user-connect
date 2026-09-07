@@ -8,7 +8,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { Button } from "@/components/ui/button";
-import { Loader2, Camera, ScanFace, Upload } from "lucide-react";
+import { Loader2, Camera, ScanFace, Upload, RotateCcw, Check } from "lucide-react";
 import {
   captureFaceDescriptor,
   descriptorDistance,
@@ -44,6 +44,15 @@ type Props =
       onVerified: (result: VerifyResult) => void;
     };
 
+// Holds a captured-but-not-yet-confirmed shot so the person can review it
+// before it's actually saved/sent — instead of the old flow where pressing
+// the capture button immediately finalized whatever the camera happened to
+// see at that instant.
+type PendingShot = {
+  descriptor: Float32Array;
+  photoDataUrl: string;
+};
+
 export function FaceCaptureDialog(props: Props) {
   const { open, mode, employeeName, onClose } = props;
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -53,11 +62,13 @@ export function FaceCaptureDialog(props: Props) {
   const [cameraError, setCameraError] = useState<string | null>(null);
   const [busy, setBusy] = useState(false);
   const [notice, setNotice] = useState<string | null>(null);
+  const [pendingShot, setPendingShot] = useState<PendingShot | null>(null);
 
   useEffect(() => {
     if (!open) return;
     setNotice(null);
     setCameraError(null);
+    setPendingShot(null);
     loadFaceModels()
       .then(() => setModelsReady(true))
       .catch(() => setCameraError("Gagal memuat model FaceID. Periksa koneksi internet."));
@@ -90,6 +101,7 @@ export function FaceCaptureDialog(props: Props) {
     props.onVerified({ matched, distance, descriptor: Array.from(descriptor), photoDataUrl });
   };
 
+  // Step 1: capture from the live camera, but only stage it for review.
   const handleCapture = async () => {
     if (!videoRef.current) return;
     setBusy(true);
@@ -102,12 +114,13 @@ export function FaceCaptureDialog(props: Props) {
         return;
       }
       const photoDataUrl = snapshotToDataUrl(videoRef.current);
-      finishWithDescriptor(descriptor, photoDataUrl);
+      setPendingShot({ descriptor, photoDataUrl });
     } finally {
       setBusy(false);
     }
   };
 
+  // Step 1 (alt): pick from an uploaded file, also staged for review first.
   const handleFileChosen = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     e.target.value = ""; // allow picking the same file again later
@@ -123,13 +136,26 @@ export function FaceCaptureDialog(props: Props) {
         return;
       }
       const photoDataUrl = imageToDataUrl(image);
-      finishWithDescriptor(descriptor, photoDataUrl);
+      setPendingShot({ descriptor, photoDataUrl });
     } catch {
       setNotice("Gagal memproses foto. Coba foto lain.");
     } finally {
       setBusy(false);
     }
   };
+
+  // Step 2: person reviews the staged shot and either retakes or confirms it.
+  const handleRetake = () => {
+    setPendingShot(null);
+    setNotice(null);
+  };
+
+  const handleConfirm = () => {
+    if (!pendingShot) return;
+    finishWithDescriptor(pendingShot.descriptor, pendingShot.photoDataUrl);
+  };
+
+  const showingReview = !!pendingShot;
 
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
@@ -140,21 +166,33 @@ export function FaceCaptureDialog(props: Props) {
             {mode === "enroll" ? "Daftarkan Wajah" : "Verifikasi FaceID"}
           </DialogTitle>
           <DialogDescription>
-            {mode === "enroll"
-              ? `Ambil foto wajah ${employeeName} sebagai referensi FaceID untuk absensi.`
-              : `Posisikan wajah ${employeeName} di depan kamera untuk verifikasi kehadiran.`}
+            {showingReview
+              ? "Periksa dulu hasil fotonya. Kalau kurang jelas, ambil ulang."
+              : mode === "enroll"
+                ? `Ambil foto wajah ${employeeName} sebagai referensi FaceID untuk absensi.`
+                : `Posisikan wajah ${employeeName} di depan kamera untuk verifikasi kehadiran.`}
           </DialogDescription>
         </DialogHeader>
 
         <div className="relative mx-auto aspect-square w-64 overflow-hidden rounded-2xl border border-border bg-black">
-          <video
-            ref={videoRef}
-            autoPlay
-            playsInline
-            muted
-            className="h-full w-full scale-x-[-1] object-cover"
-          />
-          {!modelsReady && !cameraError && (
+          {showingReview ? (
+            // Frozen still of exactly what will be saved — no ambiguity about
+            // "which photo actually got taken".
+            <img
+              src={pendingShot.photoDataUrl}
+              alt="Hasil tangkapan wajah"
+              className="h-full w-full object-cover"
+            />
+          ) : (
+            <video
+              ref={videoRef}
+              autoPlay
+              playsInline
+              muted
+              className="h-full w-full scale-x-[-1] object-cover"
+            />
+          )}
+          {!showingReview && !modelsReady && !cameraError && (
             <div className="absolute inset-0 flex flex-col items-center justify-center gap-2 bg-black/70 text-xs text-white">
               <Loader2 className="size-5 animate-spin" />
               Memuat model FaceID…
@@ -166,27 +204,41 @@ export function FaceCaptureDialog(props: Props) {
         {notice && <p className="text-center text-sm text-amber-500">{notice}</p>}
 
         <DialogFooter className="sm:flex-col sm:items-stretch sm:justify-center sm:gap-2">
-          <Button onClick={handleCapture} disabled={!modelsReady || !!cameraError || busy}>
-            {busy ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
-            Ambil &amp; {mode === "enroll" ? "Daftarkan" : "Verifikasi"}
-          </Button>
-          {mode === "enroll" && (
+          {showingReview ? (
             <>
-              <Button
-                variant="outline"
-                type="button"
-                disabled={busy}
-                onClick={() => fileInputRef.current?.click()}
-              >
-                <Upload className="size-4" /> Atau Unggah Foto
+              <Button onClick={handleConfirm}>
+                <Check className="size-4" />
+                Gunakan Foto Ini{mode === "enroll" ? " & Daftarkan" : " & Verifikasi"}
               </Button>
-              <input
-                ref={fileInputRef}
-                type="file"
-                accept="image/*"
-                className="hidden"
-                onChange={handleFileChosen}
-              />
+              <Button variant="outline" type="button" onClick={handleRetake}>
+                <RotateCcw className="size-4" /> Ambil Ulang
+              </Button>
+            </>
+          ) : (
+            <>
+              <Button onClick={handleCapture} disabled={!modelsReady || !!cameraError || busy}>
+                {busy ? <Loader2 className="size-4 animate-spin" /> : <Camera className="size-4" />}
+                Ambil Foto
+              </Button>
+              {mode === "enroll" && (
+                <>
+                  <Button
+                    variant="outline"
+                    type="button"
+                    disabled={busy}
+                    onClick={() => fileInputRef.current?.click()}
+                  >
+                    <Upload className="size-4" /> Atau Unggah Foto
+                  </Button>
+                  <input
+                    ref={fileInputRef}
+                    type="file"
+                    accept="image/*"
+                    className="hidden"
+                    onChange={handleFileChosen}
+                  />
+                </>
+              )}
             </>
           )}
         </DialogFooter>
