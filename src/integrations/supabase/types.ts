@@ -19,6 +19,8 @@ export type Database = {
           pin_hash: string;
           role: string;
           department: string | null;
+          position: string | null;
+          employee_id: string | null;
           is_developer: boolean;
           user_id: string;
         };
@@ -32,6 +34,8 @@ export type Database = {
           pin_hash: string;
           role?: string;
           department?: string | null;
+          position?: string | null;
+          employee_id?: string | null;
           is_developer?: boolean;
           user_id: string;
         };
@@ -45,6 +49,8 @@ export type Database = {
           pin_hash?: string;
           role?: string;
           department?: string | null;
+          position?: string | null;
+          employee_id?: string | null;
           is_developer?: boolean;
           user_id?: string;
         };
@@ -54,6 +60,13 @@ export type Database = {
             columns: ["company_id"];
             isOneToOne: false;
             referencedRelation: "hpm_companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "hpm_admin_users_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_employees";
             referencedColumns: ["id"];
           },
         ];
@@ -380,6 +393,7 @@ export type Database = {
           work_start_time: string;
           work_end_time: string;
           payroll_cutoff_day: number;
+          allow_outside_attendance: boolean;
           pension_years_multiplier: number;
           pension_constant: number;
           jht_rate_percent: number;
@@ -400,6 +414,7 @@ export type Database = {
           work_start_time?: string;
           work_end_time?: string;
           payroll_cutoff_day?: number;
+          allow_outside_attendance?: boolean;
           pension_years_multiplier?: number;
           pension_constant?: number;
           jht_rate_percent?: number;
@@ -420,6 +435,7 @@ export type Database = {
           work_start_time?: string;
           work_end_time?: string;
           payroll_cutoff_day?: number;
+          allow_outside_attendance?: boolean;
           pension_years_multiplier?: number;
           pension_constant?: number;
           jht_rate_percent?: number;
@@ -805,6 +821,81 @@ export type Database = {
           },
           {
             foreignKeyName: "hpm_leave_requests_supervisor_employee_id_fkey";
+            columns: ["supervisor_employee_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_employees";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      hpm_outside_attendance_requests: {
+        Row: {
+          id: string;
+          company_id: string;
+          employee_id: string;
+          action: string;
+          requested_at: string;
+          lat: string | null;
+          lng: string | null;
+          distance_meters: number | null;
+          location_note: string;
+          task_status: string | null;
+          status: string;
+          hrd_note: string | null;
+          hrd_decided_at: string | null;
+          supervisor_employee_id: string | null;
+          supervisor_note: string | null;
+          supervisor_decided_at: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          employee_id: string;
+          action: string;
+          requested_at?: string;
+          lat?: string | null;
+          lng?: string | null;
+          distance_meters?: number | null;
+          location_note: string;
+          task_status?: string | null;
+          status?: string;
+          hrd_note?: string | null;
+          hrd_decided_at?: string | null;
+          supervisor_employee_id?: string | null;
+          supervisor_note?: string | null;
+          supervisor_decided_at?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          employee_id?: string;
+          action?: string;
+          requested_at?: string;
+          lat?: string | null;
+          lng?: string | null;
+          distance_meters?: number | null;
+          location_note?: string;
+          task_status?: string | null;
+          status?: string;
+          hrd_note?: string | null;
+          hrd_decided_at?: string | null;
+          supervisor_employee_id?: string | null;
+          supervisor_note?: string | null;
+          supervisor_decided_at?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hpm_outside_attendance_requests_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "hpm_outside_attendance_requests_supervisor_employee_id_fkey";
             columns: ["supervisor_employee_id"];
             isOneToOne: false;
             referencedRelation: "hpm_employees";
