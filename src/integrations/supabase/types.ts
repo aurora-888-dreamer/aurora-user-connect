@@ -663,6 +663,44 @@ export type Database = {
           },
         ];
       };
+      hpm_menu_permissions: {
+        Row: {
+          id: string;
+          company_id: string;
+          role: string;
+          module: string;
+          menu_key: string;
+          allowed: boolean;
+          updated_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          role: string;
+          module: string;
+          menu_key: string;
+          allowed?: boolean;
+          updated_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          role?: string;
+          module?: string;
+          menu_key?: string;
+          allowed?: boolean;
+          updated_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hpm_menu_permissions_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       hpm_locations: {
         Row: {
           id: string;
