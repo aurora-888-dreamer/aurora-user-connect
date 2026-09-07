@@ -30,10 +30,13 @@ import {
   ScanFace,
   KeyRound,
   Megaphone,
+  MapPinned,
+  Clock3,
   Copy,
   Pencil,
   Trash2,
   ImageIcon,
+  History,
   IdCard,
   CheckCircle2,
   AlertTriangle,
@@ -76,6 +79,24 @@ import {
   type AttendanceRecord,
   type MaritalStatus,
   type FamilyData,
+  type Religion,
+  RELIGIONS,
+  getLocations,
+  addLocation,
+  updateLocation,
+  deleteLocation,
+  type WorkLocation,
+  type LocationType,
+  getEmployeeMutations,
+  logEmployeeMutation,
+  type EmployeeMutation,
+  type MutationField,
+  getShiftTypes,
+  addShiftType,
+  updateShiftType,
+  deleteShiftType,
+  bulkAssignShiftToDepartment,
+  type ShiftType,
 } from "@/lib/hris-data";
 import {
   getStaffAccounts,
@@ -165,6 +186,8 @@ function HrisPage() {
         <Tabs defaultValue="employees">
           <TabsList>
             <TabsTrigger value="employees">Database Karyawan</TabsTrigger>
+            <TabsTrigger value="locations">Lokasi</TabsTrigger>
+            <TabsTrigger value="shifts">Jam Kerja</TabsTrigger>
             <TabsTrigger value="attendance">Absensi GPS</TabsTrigger>
             <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
             <TabsTrigger value="announcements">Pengumuman</TabsTrigger>
@@ -173,6 +196,14 @@ function HrisPage() {
 
           <TabsContent value="employees" className="mt-6">
             <EmployeeTab employees={employees} accounts={staffAccounts} onChange={refresh} />
+          </TabsContent>
+
+          <TabsContent value="locations" className="mt-6">
+            <LocationsTab />
+          </TabsContent>
+
+          <TabsContent value="shifts" className="mt-6">
+            <ShiftsTab employees={employees} onChange={refresh} />
           </TabsContent>
 
           <TabsContent value="attendance" className="mt-6">
@@ -205,13 +236,19 @@ const emptyForm = {
   phone: "",
   department: "",
   position: "",
+  rank: "",
+  locationId: "",
+  shiftTypeId: "",
+  bankName: "",
+  bankAccountNumber: "",
+  bankAccountHolder: "",
   employmentStatus: "PKWT" as EmploymentStatus,
   joinDate: new Date().toISOString().slice(0, 10),
   npwp: "",
   ptkpStatus: "TK/0" as PtkpStatus,
   basicSalary: "",
   supervisorId: "",
-  religion: "",
+  religion: "" as Religion | "",
   maritalStatus: "" as MaritalStatus | "",
   spouseName: "",
   childrenCount: "",
@@ -236,9 +273,17 @@ function EmployeeFormDialog({
 }) {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
+  const [locations, setLocations] = useState<WorkLocation[]>([]);
+  const [shiftTypes, setShiftTypes] = useState<ShiftType[]>([]);
 
   useEffect(() => {
     if (!open) return;
+    getLocations()
+      .then(setLocations)
+      .catch(() => setLocations([]));
+    getShiftTypes()
+      .then(setShiftTypes)
+      .catch(() => setShiftTypes([]));
     const fd = editing?.familyData;
     setForm(
       editing
@@ -249,6 +294,12 @@ function EmployeeFormDialog({
             phone: editing.phone,
             department: editing.department,
             position: editing.position,
+            rank: editing.rank,
+            locationId: editing.locationId ?? "",
+            shiftTypeId: editing.shiftTypeId ?? "",
+            bankName: editing.bankName ?? "",
+            bankAccountNumber: editing.bankAccountNumber ?? "",
+            bankAccountHolder: editing.bankAccountHolder ?? "",
             employmentStatus: editing.employmentStatus,
             joinDate: editing.joinDate || new Date().toISOString().slice(0, 10),
             npwp: editing.npwp,
@@ -297,6 +348,12 @@ function EmployeeFormDialog({
         phone: form.phone,
         department: form.department || "General",
         position: form.position,
+        rank: form.rank,
+        ...(form.locationId ? { locationId: form.locationId } : {}),
+        ...(form.shiftTypeId ? { shiftTypeId: form.shiftTypeId } : {}),
+        bankName: form.bankName,
+        bankAccountNumber: form.bankAccountNumber,
+        bankAccountHolder: form.bankAccountHolder,
         employmentStatus: form.employmentStatus,
         joinDate: form.joinDate,
         npwp: form.npwp,
@@ -304,11 +361,52 @@ function EmployeeFormDialog({
         basicSalary: Number(form.basicSalary),
         isActive: true,
         source: "MANUAL" as const,
-        supervisorId: form.supervisorId || undefined,
-        familyData: Object.keys(familyData).length > 0 ? familyData : undefined,
+        ...(form.supervisorId ? { supervisorId: form.supervisorId } : {}),
+        ...(Object.keys(familyData).length > 0 ? { familyData } : {}),
       };
       if (editing) {
         await updateEmployee(editing.id, payload);
+        // Jabatan/Pangkat/Departemen/Lokasi bisa berubah sewaktu-waktu — catat
+        // sebagai riwayat mutasi, bukan cuma ditimpa diam-diam.
+        const mutationChecks: {
+          field: MutationField;
+          oldVal: string;
+          newVal: string;
+          label: string;
+        }[] = [
+          {
+            field: "department",
+            oldVal: editing.department,
+            newVal: payload.department,
+            label: "",
+          },
+          { field: "position", oldVal: editing.position, newVal: payload.position, label: "" },
+          { field: "rank", oldVal: editing.rank, newVal: payload.rank, label: "" },
+          {
+            field: "location",
+            oldVal: locations.find((l) => l.id === editing.locationId)?.name ?? "",
+            newVal: locations.find((l) => l.id === payload.locationId)?.name ?? "",
+            label: "",
+          },
+          {
+            field: "shift",
+            oldVal: shiftTypes.find((s) => s.id === editing.shiftTypeId)?.name ?? "",
+            newVal: shiftTypes.find((s) => s.id === payload.shiftTypeId)?.name ?? "",
+            label: "",
+          },
+        ];
+        for (const check of mutationChecks) {
+          if (check.oldVal !== check.newVal) {
+            await logEmployeeMutation({
+              employeeId: editing.id,
+              fieldChanged: check.field,
+              ...(check.oldVal ? { oldValue: check.oldVal } : {}),
+              ...(check.newVal ? { newValue: check.newVal } : {}),
+            }).catch(() => {
+              /* non-fatal — the main data update already succeeded */
+            });
+          }
+        }
         toast.success(`Data ${form.fullName} diperbarui.`);
       } else {
         await addEmployee(payload);
@@ -390,6 +488,53 @@ function EmployeeFormDialog({
               onChange={(e) => setForm({ ...form, position: e.target.value })}
               placeholder="Staff / Supervisor / Manager"
             />
+          </div>
+          <div>
+            <Label>Pangkat / Golongan</Label>
+            <Input
+              className="mt-2"
+              value={form.rank}
+              onChange={(e) => setForm({ ...form, rank: e.target.value })}
+              placeholder="Golongan III/A"
+            />
+          </div>
+          <div>
+            <Label>Lokasi Kerja</Label>
+            <Select
+              value={form.locationId || "default"}
+              onValueChange={(v) => setForm({ ...form, locationId: v === "default" ? "" : v })}
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Kantor Pusat (default)" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Kantor Pusat (default)</SelectItem>
+                {locations.map((l) => (
+                  <SelectItem key={l.id} value={l.id}>
+                    {l.name} ({l.type})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Shift Kerja</Label>
+            <Select
+              value={form.shiftTypeId || "default"}
+              onValueChange={(v) => setForm({ ...form, shiftTypeId: v === "default" ? "" : v })}
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Default Perusahaan" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Default Perusahaan</SelectItem>
+                {shiftTypes.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name} ({s.startTime}–{s.endTime})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Atasan Langsung</Label>
@@ -476,15 +621,59 @@ function EmployeeFormDialog({
         </div>
 
         <div className="mt-2 border-t border-border pt-4">
+          <h4 className="text-sm font-semibold">Data Rekening Bank (untuk pembayaran gaji)</h4>
+          <div className="mt-3 grid gap-4 sm:grid-cols-3">
+            <div>
+              <Label>Nama Bank</Label>
+              <Input
+                className="mt-2"
+                value={form.bankName}
+                onChange={(e) => setForm({ ...form, bankName: e.target.value })}
+                placeholder="BCA"
+              />
+            </div>
+            <div>
+              <Label>Nomor Rekening</Label>
+              <Input
+                className="mt-2"
+                value={form.bankAccountNumber}
+                onChange={(e) => setForm({ ...form, bankAccountNumber: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Atas Nama</Label>
+              <Input
+                className="mt-2"
+                value={form.bankAccountHolder}
+                onChange={(e) => setForm({ ...form, bankAccountHolder: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-2 border-t border-border pt-4">
           <h4 className="text-sm font-semibold">Data Keluarga</h4>
           <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
             <div>
               <Label>Agama</Label>
-              <Input
-                className="mt-2"
-                value={form.religion}
-                onChange={(e) => setForm({ ...form, religion: e.target.value })}
-              />
+              <Select
+                value={form.religion || "none"}
+                onValueChange={(v) =>
+                  setForm({ ...form, religion: v === "none" ? "" : (v as Religion) })
+                }
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Pilih agama" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Belum diisi</SelectItem>
+                  {RELIGIONS.map((r) => (
+                    <SelectItem key={r} value={r}>
+                      {r}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
             </div>
             <div>
               <Label>Status Perkawinan</Label>
@@ -675,6 +864,64 @@ function EmployeePhotosDialog({
   );
 }
 
+const MUTATION_FIELD_LABELS: Record<MutationField, string> = {
+  department: "Departemen",
+  position: "Jabatan",
+  rank: "Pangkat",
+  location: "Lokasi Kerja",
+  shift: "Shift Kerja",
+};
+
+function EmployeeMutationsDialog({
+  employee,
+  onClose,
+}: {
+  employee: Employee;
+  onClose: () => void;
+}) {
+  const [items, setItems] = useState<EmployeeMutation[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    getEmployeeMutations(employee.id)
+      .then(setItems)
+      .catch(() => setItems([]))
+      .finally(() => setLoading(false));
+  }, [employee.id]);
+
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Riwayat Mutasi — {employee.fullName}</DialogTitle>
+          <DialogDescription>
+            Perubahan Jabatan, Pangkat, Departemen, dan Lokasi Kerja tercatat di sini.
+          </DialogDescription>
+        </DialogHeader>
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Memuat…</p>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Belum ada riwayat mutasi.</p>
+        ) : (
+          <ul className="max-h-96 space-y-2 overflow-y-auto">
+            {items.map((m) => (
+              <li key={m.id} className="rounded-lg border border-border p-3 text-sm">
+                <div className="flex items-center justify-between">
+                  <span className="font-medium">{MUTATION_FIELD_LABELS[m.fieldChanged]}</span>
+                  <span className="text-xs text-muted-foreground">{m.effectiveDate}</span>
+                </div>
+                <p className="mt-1 text-muted-foreground">
+                  {m.oldValue || "—"} <span className="mx-1">→</span> {m.newValue || "—"}
+                </p>
+              </li>
+            ))}
+          </ul>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
 function EmployeeTab({
   employees,
   accounts,
@@ -689,6 +936,7 @@ function EmployeeTab({
   const [deleting, setDeleting] = useState<Employee | null>(null);
   const [deletingBusy, setDeletingBusy] = useState(false);
   const [viewingPhotosFor, setViewingPhotosFor] = useState<Employee | null>(null);
+  const [viewingMutationsFor, setViewingMutationsFor] = useState<Employee | null>(null);
 
   const accountByEmployeeId = new Map(accounts.map((a) => [a.employeeId, a]));
 
@@ -773,6 +1021,14 @@ function EmployeeTab({
                       <Button
                         size="sm"
                         variant="outline"
+                        title="Riwayat Mutasi"
+                        onClick={() => setViewingMutationsFor(e)}
+                      >
+                        <History className="size-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
                         title="Edit"
                         onClick={() => {
                           setEditing(e);
@@ -816,6 +1072,13 @@ function EmployeeTab({
           employee={viewingPhotosFor}
           account={accountByEmployeeId.get(viewingPhotosFor.id)}
           onClose={() => setViewingPhotosFor(null)}
+        />
+      )}
+
+      {viewingMutationsFor && (
+        <EmployeeMutationsDialog
+          employee={viewingMutationsFor}
+          onClose={() => setViewingMutationsFor(null)}
         />
       )}
 
@@ -1244,6 +1507,586 @@ function AnnouncementsTab() {
           </ul>
         )}
       </section>
+    </div>
+  );
+}
+
+const LOCATION_TYPES: LocationType[] = ["Kantor", "Cabang", "Toko", "Gudang", "Pabrik", "Lainnya"];
+
+function LocationsTab() {
+  const [items, setItems] = useState<WorkLocation[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<WorkLocation | "new" | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    type: "Cabang" as LocationType,
+    address: "",
+    lat: "",
+    lng: "",
+    radiusMeters: "30",
+  });
+  const [submitting, setSubmitting] = useState(false);
+  const [locating, setLocating] = useState(false);
+
+  const refresh = () => {
+    setLoading(true);
+    getLocations()
+      .then(setItems)
+      .catch(() => toast.error("Gagal memuat data lokasi."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(refresh, []);
+
+  const openNew = () => {
+    setForm({ name: "", type: "Cabang", address: "", lat: "", lng: "", radiusMeters: "30" });
+    setEditing("new");
+  };
+
+  const openEdit = (loc: WorkLocation) => {
+    setForm({
+      name: loc.name,
+      type: loc.type,
+      address: loc.address,
+      lat: loc.lat !== null ? String(loc.lat) : "",
+      lng: loc.lng !== null ? String(loc.lng) : "",
+      radiusMeters: String(loc.radiusMeters),
+    });
+    setEditing(loc);
+  };
+
+  const handleUseCurrentLocation = () => {
+    if (!navigator.geolocation) {
+      toast.error("Perangkat ini tidak mendukung GPS.");
+      return;
+    }
+    setLocating(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setForm((f) => ({
+          ...f,
+          lat: String(pos.coords.latitude),
+          lng: String(pos.coords.longitude),
+        }));
+        setLocating(false);
+      },
+      () => {
+        setLocating(false);
+        toast.error("Gagal mengambil lokasi.");
+      },
+    );
+  };
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) {
+      toast.error("Nama lokasi wajib diisi.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        type: form.type,
+        address: form.address,
+        lat: form.lat ? Number(form.lat) : null,
+        lng: form.lng ? Number(form.lng) : null,
+        radiusMeters: Number(form.radiusMeters) || 30,
+      };
+      if (editing && editing !== "new") {
+        await updateLocation(editing.id, payload);
+        toast.success("Lokasi diperbarui.");
+      } else {
+        await addLocation(payload);
+        toast.success("Lokasi ditambahkan.");
+      }
+      setEditing(null);
+      refresh();
+    } catch {
+      toast.error("Gagal menyimpan lokasi. Coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteLocation(id);
+      toast.success("Lokasi dihapus.");
+      refresh();
+    } catch {
+      toast.error(
+        "Gagal menghapus. Pastikan tidak ada karyawan yang masih di-assign ke lokasi ini.",
+      );
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-semibold">Cabang / Toko / Gudang / Pabrik</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Tiap lokasi punya titik GPS &amp; radius sendiri sebagai basis absensi karyawan yang
+            di-assign ke situ. Kantor Pusat (menu Pengaturan) tetap jadi default kalau karyawan
+            tidak di-assign ke lokasi manapun.
+          </p>
+        </div>
+        <Button onClick={openNew}>
+          <MapPinned className="size-4" /> Tambah Lokasi
+        </Button>
+      </div>
+
+      <section className="glass-panel overflow-hidden">
+        {loading ? (
+          <p className="p-7 text-sm text-muted-foreground">Memuat…</p>
+        ) : items.length === 0 ? (
+          <p className="p-7 text-sm text-muted-foreground">Belum ada lokasi tambahan.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nama</TableHead>
+                <TableHead>Tipe</TableHead>
+                <TableHead>Titik GPS</TableHead>
+                <TableHead>Radius</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((l) => (
+                <TableRow key={l.id}>
+                  <TableCell>{l.name}</TableCell>
+                  <TableCell>
+                    <Badge variant="secondary">{l.type}</Badge>
+                  </TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {l.lat !== null ? `${l.lat.toFixed(5)}, ${l.lng?.toFixed(5)}` : "Belum diatur"}
+                  </TableCell>
+                  <TableCell>{l.radiusMeters}m</TableCell>
+                  <TableCell className="flex gap-1.5">
+                    <Button size="sm" variant="outline" onClick={() => openEdit(l)}>
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleDelete(l.id)}>
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </section>
+
+      <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
+        <DialogContent className="sm:max-w-lg">
+          <DialogHeader>
+            <DialogTitle>{editing === "new" ? "Tambah Lokasi" : "Edit Lokasi"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div className="grid gap-4 sm:grid-cols-2">
+              <div>
+                <Label>Nama Lokasi</Label>
+                <Input
+                  className="mt-2"
+                  value={form.name}
+                  onChange={(e) => setForm({ ...form, name: e.target.value })}
+                  placeholder="Cabang Bandung"
+                />
+              </div>
+              <div>
+                <Label>Tipe</Label>
+                <Select
+                  value={form.type}
+                  onValueChange={(v) => setForm({ ...form, type: v as LocationType })}
+                >
+                  <SelectTrigger className="mt-2">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {LOCATION_TYPES.map((t) => (
+                      <SelectItem key={t} value={t}>
+                        {t}
+                      </SelectItem>
+                    ))}
+                  </SelectContent>
+                </Select>
+              </div>
+            </div>
+            <div>
+              <Label>Alamat</Label>
+              <Input
+                className="mt-2"
+                value={form.address}
+                onChange={(e) => setForm({ ...form, address: e.target.value })}
+              />
+            </div>
+            <div className="grid gap-4 sm:grid-cols-3">
+              <div>
+                <Label>Latitude</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  className="mt-2"
+                  value={form.lat}
+                  onChange={(e) => setForm({ ...form, lat: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Longitude</Label>
+                <Input
+                  type="number"
+                  step="any"
+                  className="mt-2"
+                  value={form.lng}
+                  onChange={(e) => setForm({ ...form, lng: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Radius (meter)</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  className="mt-2"
+                  value={form.radiusMeters}
+                  onChange={(e) => setForm({ ...form, radiusMeters: e.target.value })}
+                />
+              </div>
+            </div>
+            <Button variant="outline" onClick={handleUseCurrentLocation} disabled={locating}>
+              <MapPinned className="size-4" />{" "}
+              {locating ? "Mengambil lokasi…" : "Ambil dari Lokasi Saya Sekarang"}
+            </Button>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>
+              Batal
+            </Button>
+            <Button onClick={handleSubmit} disabled={submitting}>
+              {submitting ? "Menyimpan…" : "Simpan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </div>
+  );
+}
+
+const DAY_LABELS = ["Min", "Sen", "Sel", "Rab", "Kam", "Jum", "Sab"];
+
+function ShiftsTab({ employees, onChange }: { employees: Employee[]; onChange: () => void }) {
+  const [items, setItems] = useState<ShiftType[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [editing, setEditing] = useState<ShiftType | "new" | null>(null);
+  const [form, setForm] = useState({
+    name: "",
+    startTime: "09:00",
+    endTime: "17:00",
+    daysOfWeek: [1, 2, 3, 4, 5] as number[],
+    lateGraceMinutes: "15",
+    earlyLeaveGraceMinutes: "60",
+  });
+  const [submitting, setSubmitting] = useState(false);
+
+  // Bulk department reassignment
+  const [bulkDept, setBulkDept] = useState("");
+  const [bulkShiftId, setBulkShiftId] = useState("");
+  const [bulkBusy, setBulkBusy] = useState(false);
+
+  const departments = Array.from(new Set(employees.map((e) => e.department).filter(Boolean)));
+
+  const refresh = () => {
+    setLoading(true);
+    getShiftTypes()
+      .then(setItems)
+      .catch(() => toast.error("Gagal memuat data shift."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(refresh, []);
+
+  const openNew = () => {
+    setForm({
+      name: "",
+      startTime: "09:00",
+      endTime: "17:00",
+      daysOfWeek: [1, 2, 3, 4, 5],
+      lateGraceMinutes: "15",
+      earlyLeaveGraceMinutes: "60",
+    });
+    setEditing("new");
+  };
+
+  const openEdit = (s: ShiftType) => {
+    setForm({
+      name: s.name,
+      startTime: s.startTime,
+      endTime: s.endTime,
+      daysOfWeek: s.daysOfWeek,
+      lateGraceMinutes: String(s.lateGraceMinutes),
+      earlyLeaveGraceMinutes: String(s.earlyLeaveGraceMinutes),
+    });
+    setEditing(s);
+  };
+
+  const toggleDay = (day: number) => {
+    setForm((f) => ({
+      ...f,
+      daysOfWeek: f.daysOfWeek.includes(day)
+        ? f.daysOfWeek.filter((d) => d !== day)
+        : [...f.daysOfWeek, day].sort(),
+    }));
+  };
+
+  const handleSubmit = async () => {
+    if (!form.name.trim()) {
+      toast.error("Nama shift wajib diisi.");
+      return;
+    }
+    if (form.daysOfWeek.length === 0) {
+      toast.error("Pilih minimal satu hari aktif.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      const payload = {
+        name: form.name.trim(),
+        startTime: form.startTime,
+        endTime: form.endTime,
+        daysOfWeek: form.daysOfWeek,
+        lateGraceMinutes: Number(form.lateGraceMinutes) || 15,
+        earlyLeaveGraceMinutes: Number(form.earlyLeaveGraceMinutes) || 60,
+      };
+      if (editing && editing !== "new") {
+        await updateShiftType(editing.id, payload);
+        toast.success("Shift diperbarui.");
+      } else {
+        await addShiftType(payload);
+        toast.success("Shift ditambahkan.");
+      }
+      setEditing(null);
+      refresh();
+    } catch {
+      toast.error("Gagal menyimpan shift. Coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteShiftType(id);
+      toast.success("Shift dihapus.");
+      refresh();
+    } catch {
+      toast.error("Gagal menghapus. Pastikan tidak ada karyawan yang masih pakai shift ini.");
+    }
+  };
+
+  const handleBulkAssign = async () => {
+    if (!bulkDept || !bulkShiftId) {
+      toast.error("Pilih departemen dan shift tujuan.");
+      return;
+    }
+    setBulkBusy(true);
+    try {
+      const count = await bulkAssignShiftToDepartment(bulkDept, bulkShiftId);
+      toast.success(`Jadwal ${count} karyawan di departemen ${bulkDept} diperbarui.`);
+      onChange();
+    } catch {
+      toast.error("Gagal menerapkan perubahan massal. Coba lagi.");
+    } finally {
+      setBulkBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-semibold">Tipe Jam Kerja / Shift</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            3 shift awal (Reguler, Pagi, Malam) sudah dibuatkan otomatis — ubah atau tambah sesuai
+            kebutuhan. Tiap shift punya jam &amp; hari aktif sendiri.
+          </p>
+        </div>
+        <Button onClick={openNew}>
+          <Clock3 className="size-4" /> Tambah Shift
+        </Button>
+      </div>
+
+      <section className="glass-panel overflow-hidden">
+        {loading ? (
+          <p className="p-7 text-sm text-muted-foreground">Memuat…</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nama</TableHead>
+                <TableHead>Jam</TableHead>
+                <TableHead>Hari Aktif</TableHead>
+                <TableHead>Toleransi</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((s) => (
+                <TableRow key={s.id}>
+                  <TableCell>{s.name}</TableCell>
+                  <TableCell className="font-mono text-xs">
+                    {s.startTime}–{s.endTime}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {s.daysOfWeek.map((d) => DAY_LABELS[d]).join(", ")}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground">
+                    Telat {s.lateGraceMinutes}m / Pulang {s.earlyLeaveGraceMinutes}m
+                  </TableCell>
+                  <TableCell className="flex gap-1.5">
+                    <Button size="sm" variant="outline" onClick={() => openEdit(s)}>
+                      <Pencil className="size-3.5" />
+                    </Button>
+                    <Button size="sm" variant="outline" onClick={() => handleDelete(s.id)}>
+                      <Trash2 className="size-3.5" />
+                    </Button>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </section>
+
+      <section className="glass-panel p-7">
+        <h3 className="text-base font-semibold">Ubah Jadwal per Departemen</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Berguna untuk rotasi shift departemen tertentu (misal Security) — terapkan satu shift ke
+          semua karyawan di departemen itu sekaligus.
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label>Departemen</Label>
+            <Select value={bulkDept} onValueChange={setBulkDept}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Pilih departemen" />
+              </SelectTrigger>
+              <SelectContent>
+                {departments.map((d) => (
+                  <SelectItem key={d} value={d}>
+                    {d}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
+            <Label>Shift Tujuan</Label>
+            <Select value={bulkShiftId} onValueChange={setBulkShiftId}>
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Pilih shift" />
+              </SelectTrigger>
+              <SelectContent>
+                {items.map((s) => (
+                  <SelectItem key={s.id} value={s.id}>
+                    {s.name} ({s.startTime}–{s.endTime})
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div className="flex items-end">
+            <Button onClick={handleBulkAssign} disabled={bulkBusy} className="w-full">
+              {bulkBusy ? "Menerapkan…" : "Terapkan"}
+            </Button>
+          </div>
+        </div>
+      </section>
+
+      <Dialog open={!!editing} onOpenChange={(v) => !v && setEditing(null)}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle>{editing === "new" ? "Tambah Shift" : "Edit Shift"}</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Nama Shift</Label>
+              <Input
+                className="mt-2"
+                value={form.name}
+                onChange={(e) => setForm({ ...form, name: e.target.value })}
+                placeholder="Shift Sore"
+              />
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Jam Mulai</Label>
+                <Input
+                  type="time"
+                  className="mt-2"
+                  value={form.startTime}
+                  onChange={(e) => setForm({ ...form, startTime: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Jam Selesai</Label>
+                <Input
+                  type="time"
+                  className="mt-2"
+                  value={form.endTime}
+                  onChange={(e) => setForm({ ...form, endTime: e.target.value })}
+                />
+              </div>
+            </div>
+            <div>
+              <Label>Hari Aktif</Label>
+              <div className="mt-2 flex flex-wrap gap-2">
+                {DAY_LABELS.map((label, day) => (
+                  <button
+                    key={day}
+                    type="button"
+                    onClick={() => toggleDay(day)}
+                    className={`rounded-full border px-3 py-1.5 text-xs ${
+                      form.daysOfWeek.includes(day)
+                        ? "border-primary bg-primary/15 text-primary"
+                        : "border-border text-muted-foreground"
+                    }`}
+                  >
+                    {label}
+                  </button>
+                ))}
+              </div>
+            </div>
+            <div className="grid grid-cols-2 gap-4">
+              <div>
+                <Label>Toleransi Telat (menit)</Label>
+                <Input
+                  type="number"
+                  className="mt-2"
+                  value={form.lateGraceMinutes}
+                  onChange={(e) => setForm({ ...form, lateGraceMinutes: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Toleransi Pulang (menit)</Label>
+                <Input
+                  type="number"
+                  className="mt-2"
+                  value={form.earlyLeaveGraceMinutes}
+                  onChange={(e) => setForm({ ...form, earlyLeaveGraceMinutes: e.target.value })}
+                />
+              </div>
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setEditing(null)}>
+              Batal
+            </Button>
+            <Button onClick={handleSubmit} disabled={submitting}>
+              {submitting ? "Menyimpan…" : "Simpan"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
