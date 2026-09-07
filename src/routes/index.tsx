@@ -15,6 +15,7 @@ function LoginComponent() {
   const [userId, setUserId] = useState("");
   const [pin, setPin] = useState("");
   const [error, setError] = useState("");
+  const [submitting, setSubmitting] = useState(false);
 
   // Already logged in on this device/session — skip the login form and go
   // straight to the Dashboard instead of showing it again.
