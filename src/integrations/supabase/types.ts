@@ -244,6 +244,9 @@ export type Database = {
           office_radius_meters: number;
           work_start_time: string;
           work_end_time: string;
+          payroll_cutoff_day: number;
+          pension_years_multiplier: number;
+          pension_constant: number;
           phone: string | null;
           subscription_status: string;
           website: string | null;
@@ -260,6 +263,9 @@ export type Database = {
           office_radius_meters?: number;
           work_start_time?: string;
           work_end_time?: string;
+          payroll_cutoff_day?: number;
+          pension_years_multiplier?: number;
+          pension_constant?: number;
           phone?: string | null;
           subscription_status?: string;
           website?: string | null;
@@ -276,6 +282,9 @@ export type Database = {
           office_radius_meters?: number;
           work_start_time?: string;
           work_end_time?: string;
+          payroll_cutoff_day?: number;
+          pension_years_multiplier?: number;
+          pension_constant?: number;
           phone?: string | null;
           subscription_status?: string;
           website?: string | null;
@@ -293,6 +302,7 @@ export type Database = {
           rank: string | null;
           position_level: string;
           blood_type: string | null;
+          date_of_birth: string | null;
           location_id: string | null;
           shift_type_id: string | null;
           family_data: Json | null;
@@ -317,7 +327,7 @@ export type Database = {
           health_allowance: number;
           insurance_allowance: number;
           overtime_rate_per_hour: number;
-          pension_contribution: number;
+          jht_deduction: number;
           performance_bonus: number;
         };
         Insert: {
@@ -329,6 +339,7 @@ export type Database = {
           rank?: string | null;
           position_level?: string;
           blood_type?: string | null;
+          date_of_birth?: string | null;
           location_id?: string | null;
           shift_type_id?: string | null;
           family_data?: Json | null;
@@ -353,7 +364,7 @@ export type Database = {
           health_allowance?: number;
           insurance_allowance?: number;
           overtime_rate_per_hour?: number;
-          pension_contribution?: number;
+          jht_deduction?: number;
           performance_bonus?: number;
         };
         Update: {
@@ -365,6 +376,7 @@ export type Database = {
           rank?: string | null;
           position_level?: string;
           blood_type?: string | null;
+          date_of_birth?: string | null;
           location_id?: string | null;
           shift_type_id?: string | null;
           family_data?: Json | null;
@@ -389,7 +401,7 @@ export type Database = {
           health_allowance?: number;
           insurance_allowance?: number;
           overtime_rate_per_hour?: number;
-          pension_contribution?: number;
+          jht_deduction?: number;
           performance_bonus?: number;
         };
         Relationships: [
