@@ -291,6 +291,8 @@ export type Database = {
           department: string | null;
           position: string | null;
           rank: string | null;
+          position_level: string;
+          blood_type: string | null;
           location_id: string | null;
           shift_type_id: string | null;
           family_data: Json | null;
@@ -325,6 +327,8 @@ export type Database = {
           department?: string | null;
           position?: string | null;
           rank?: string | null;
+          position_level?: string;
+          blood_type?: string | null;
           location_id?: string | null;
           shift_type_id?: string | null;
           family_data?: Json | null;
@@ -359,6 +363,8 @@ export type Database = {
           department?: string | null;
           position?: string | null;
           rank?: string | null;
+          position_level?: string;
+          blood_type?: string | null;
           location_id?: string | null;
           shift_type_id?: string | null;
           family_data?: Json | null;
