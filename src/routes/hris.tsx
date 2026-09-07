@@ -72,6 +72,8 @@ import {
   type PtkpStatus,
   type Payroll,
   type AttendanceRecord,
+  type MaritalStatus,
+  type FamilyData,
 } from "@/lib/hris-data";
 import {
   getStaffAccounts,
@@ -181,28 +183,42 @@ function HrisPage() {
   );
 }
 
+const MARITAL_STATUSES: MaritalStatus[] = ["Menikah", "Belum Menikah", "Cerai Hidup", "Cerai Mati"];
+
 const emptyForm = {
   nik: "",
   fullName: "",
   email: "",
   phone: "",
   department: "",
+  position: "",
   employmentStatus: "PKWT" as EmploymentStatus,
   joinDate: new Date().toISOString().slice(0, 10),
   npwp: "",
   ptkpStatus: "TK/0" as PtkpStatus,
   basicSalary: "",
+  supervisorId: "",
+  religion: "",
+  maritalStatus: "" as MaritalStatus | "",
+  spouseName: "",
+  childrenCount: "",
+  childrenNames: "",
+  fatherName: "",
+  motherName: "",
+  siblingsCount: "",
 };
 
 function EmployeeFormDialog({
   open,
   onClose,
   editing,
+  employees,
   onSaved,
 }: {
   open: boolean;
   onClose: () => void;
   editing: Employee | null;
+  employees: Employee[];
   onSaved: () => void;
 }) {
   const [form, setForm] = useState(emptyForm);
@@ -210,6 +226,7 @@ function EmployeeFormDialog({
 
   useEffect(() => {
     if (!open) return;
+    const fd = editing?.familyData;
     setForm(
       editing
         ? {
@@ -218,11 +235,21 @@ function EmployeeFormDialog({
             email: editing.email,
             phone: editing.phone,
             department: editing.department,
+            position: editing.position,
             employmentStatus: editing.employmentStatus,
             joinDate: editing.joinDate || new Date().toISOString().slice(0, 10),
             npwp: editing.npwp,
             ptkpStatus: editing.ptkpStatus,
             basicSalary: String(editing.basicSalary),
+            supervisorId: editing.supervisorId ?? "",
+            religion: fd?.religion ?? "",
+            maritalStatus: fd?.maritalStatus ?? "",
+            spouseName: fd?.spouseName ?? "",
+            childrenCount: fd?.childrenCount !== undefined ? String(fd.childrenCount) : "",
+            childrenNames: fd?.childrenNames ?? "",
+            fatherName: fd?.fatherName ?? "",
+            motherName: fd?.motherName ?? "",
+            siblingsCount: fd?.siblingsCount !== undefined ? String(fd.siblingsCount) : "",
           }
         : emptyForm,
     );
@@ -235,12 +262,28 @@ function EmployeeFormDialog({
     }
     setSubmitting(true);
     try {
+      const familyData: FamilyData = {
+        ...(form.religion ? { religion: form.religion } : {}),
+        ...(form.maritalStatus ? { maritalStatus: form.maritalStatus } : {}),
+        ...(form.maritalStatus === "Menikah"
+          ? {
+              ...(form.spouseName ? { spouseName: form.spouseName } : {}),
+              ...(form.childrenCount ? { childrenCount: Number(form.childrenCount) } : {}),
+              ...(form.childrenNames ? { childrenNames: form.childrenNames } : {}),
+            }
+          : {
+              ...(form.fatherName ? { fatherName: form.fatherName } : {}),
+              ...(form.motherName ? { motherName: form.motherName } : {}),
+              ...(form.siblingsCount ? { siblingsCount: Number(form.siblingsCount) } : {}),
+            }),
+      };
       const payload = {
         nik: form.nik,
         fullName: form.fullName,
         email: form.email,
         phone: form.phone,
         department: form.department || "General",
+        position: form.position,
         employmentStatus: form.employmentStatus,
         joinDate: form.joinDate,
         npwp: form.npwp,
@@ -248,6 +291,8 @@ function EmployeeFormDialog({
         basicSalary: Number(form.basicSalary),
         isActive: true,
         source: "MANUAL" as const,
+        supervisorId: form.supervisorId || undefined,
+        familyData: Object.keys(familyData).length > 0 ? familyData : undefined,
       };
       if (editing) {
         await updateEmployee(editing.id, payload);
@@ -269,9 +314,11 @@ function EmployeeFormDialog({
     }
   };
 
+  const supervisorOptions = employees.filter((e) => e.id !== editing?.id);
+
   return (
     <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
-      <DialogContent className="sm:max-w-2xl">
+      <DialogContent className="max-h-[85vh] overflow-y-auto sm:max-w-2xl">
         <DialogHeader>
           <DialogTitle>
             {editing ? `Edit Karyawan — ${editing.fullName}` : "Tambah Karyawan"}
@@ -321,6 +368,34 @@ function EmployeeFormDialog({
               onChange={(e) => setForm({ ...form, department: e.target.value })}
               placeholder="Sales"
             />
+          </div>
+          <div>
+            <Label>Jabatan</Label>
+            <Input
+              className="mt-2"
+              value={form.position}
+              onChange={(e) => setForm({ ...form, position: e.target.value })}
+              placeholder="Staff / Supervisor / Manager"
+            />
+          </div>
+          <div>
+            <Label>Atasan Langsung</Label>
+            <Select
+              value={form.supervisorId || "none"}
+              onValueChange={(v) => setForm({ ...form, supervisorId: v === "none" ? "" : v })}
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Tidak ada" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Tidak ada</SelectItem>
+                {supervisorOptions.map((e) => (
+                  <SelectItem key={e.id} value={e.id}>
+                    {e.fullName} {e.position ? `— ${e.position}` : ""}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
           </div>
           <div>
             <Label>Status Kepegawaian</Label>
@@ -386,6 +461,103 @@ function EmployeeFormDialog({
             />
           </div>
         </div>
+
+        <div className="mt-2 border-t border-border pt-4">
+          <h4 className="text-sm font-semibold">Data Keluarga</h4>
+          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+            <div>
+              <Label>Agama</Label>
+              <Input
+                className="mt-2"
+                value={form.religion}
+                onChange={(e) => setForm({ ...form, religion: e.target.value })}
+              />
+            </div>
+            <div>
+              <Label>Status Perkawinan</Label>
+              <Select
+                value={form.maritalStatus || "none"}
+                onValueChange={(v) =>
+                  setForm({ ...form, maritalStatus: v === "none" ? "" : (v as MaritalStatus) })
+                }
+              >
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Pilih status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="none">Belum diisi</SelectItem>
+                  {MARITAL_STATUSES.map((s) => (
+                    <SelectItem key={s} value={s}>
+                      {s}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          </div>
+
+          {form.maritalStatus === "Menikah" ? (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <Label>Nama Pasangan</Label>
+                <Input
+                  className="mt-2"
+                  value={form.spouseName}
+                  onChange={(e) => setForm({ ...form, spouseName: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Jumlah Anak</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  className="mt-2"
+                  value={form.childrenCount}
+                  onChange={(e) => setForm({ ...form, childrenCount: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Nama Anak (pisahkan koma)</Label>
+                <Input
+                  className="mt-2"
+                  value={form.childrenNames}
+                  onChange={(e) => setForm({ ...form, childrenNames: e.target.value })}
+                  placeholder="Ani (2015), Budi (2018)"
+                />
+              </div>
+            </div>
+          ) : form.maritalStatus ? (
+            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <div>
+                <Label>Nama Ayah</Label>
+                <Input
+                  className="mt-2"
+                  value={form.fatherName}
+                  onChange={(e) => setForm({ ...form, fatherName: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Nama Ibu</Label>
+                <Input
+                  className="mt-2"
+                  value={form.motherName}
+                  onChange={(e) => setForm({ ...form, motherName: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Jumlah Saudara Kandung</Label>
+                <Input
+                  type="number"
+                  min={0}
+                  className="mt-2"
+                  value={form.siblingsCount}
+                  onChange={(e) => setForm({ ...form, siblingsCount: e.target.value })}
+                />
+              </div>
+            </div>
+          ) : null}
+        </div>
+
         <DialogFooter>
           <Button variant="outline" onClick={onClose}>
             Batal
@@ -621,6 +793,7 @@ function EmployeeTab({
       <EmployeeFormDialog
         open={formOpen}
         editing={editing}
+        employees={employees}
         onClose={() => setFormOpen(false)}
         onSaved={onChange}
       />

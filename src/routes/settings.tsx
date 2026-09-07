@@ -5,7 +5,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { LocateFixed, Save, MapPin } from "lucide-react";
+import { LocateFixed, Save, MapPin, Clock } from "lucide-react";
 import { getActiveSession } from "@/lib/aurora-id";
 import {
   getCompanyProfile,
@@ -221,6 +221,37 @@ function SettingsPage() {
             Titik tersimpan: {form.officeLat}, {form.officeLng}
           </p>
         )}
+      </section>
+
+      <section className="glass-panel p-7">
+        <h3 className="flex items-center gap-2 text-base font-semibold">
+          <Clock className="size-4 text-primary" />
+          Jam Kerja
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Dipakai untuk deteksi telat masuk (&gt;15 menit) dan pulang lewat jadwal (&gt;60 menit, di
+          luar tugas keluar) — staff akan diminta memberi alasan.
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label>Jam Masuk</Label>
+            <Input
+              type="time"
+              className="mt-2"
+              value={form.workStartTime}
+              onChange={(e) => setForm({ ...form, workStartTime: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Jam Pulang</Label>
+            <Input
+              type="time"
+              className="mt-2"
+              value={form.workEndTime}
+              onChange={(e) => setForm({ ...form, workEndTime: e.target.value })}
+            />
+          </div>
+        </div>
       </section>
 
       <Button onClick={handleSave} size="lg" disabled={saving}>
