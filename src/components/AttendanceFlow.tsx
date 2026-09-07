@@ -19,19 +19,20 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { MapPin, LogIn, LogOut, ScanFace, AlertTriangle } from "lucide-react";
+import { MapPin, LogIn, LogOut, ScanFace, AlertTriangle, History } from "lucide-react";
 import { FaceCaptureDialog } from "@/components/FaceCaptureDialog";
 import {
   getCompanyProfile,
   isOfficeLocationSet,
   distanceMeters,
+  isPastSchedule,
   DEFAULT_OFFICE_RADIUS_METERS,
   type CompanyProfile,
 } from "@/lib/company-data";
 import {
   clockIn,
   clockOut,
-  todayRecordFor,
+  getTodaySessionsFor,
   type Employee,
   type AttendanceRecord,
 } from "@/lib/hris-data";
@@ -44,12 +45,16 @@ export function AttendanceFlow({
   onChange: () => void;
 }) {
   const [gpsLoading, setGpsLoading] = useState(false);
-  const [dialog, setDialog] = useState<null | "outside" | "enroll-needed" | "verify">(null);
+  const [dialog, setDialog] = useState<
+    null | "outside" | "late-in" | "late-out" | "enroll-needed" | "verify"
+  >(null);
   const [outsideConfirmed, setOutsideConfirmed] = useState(false);
   const [outsideNote, setOutsideNote] = useState("");
   const [outsideTask, setOutsideTask] = useState("");
+  const [lateInReasonText, setLateInReasonText] = useState("");
+  const [lateOutReasonText, setLateOutReasonText] = useState("");
   const [company, setCompany] = useState<CompanyProfile | null>(null);
-  const [record, setRecord] = useState<AttendanceRecord | null>(null);
+  const [sessions, setSessions] = useState<AttendanceRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{
     coords?: { lat: string; long: string };
@@ -57,7 +62,20 @@ export function AttendanceFlow({
     isOutsideOffice?: boolean;
     outsideLocationNote?: string;
     outsideTaskStatus?: string;
+    lateInReason?: string;
   }>({});
+
+  const openSession = sessions.find((s) => !s.clockOut) ?? null;
+
+  const reloadSessions = () => {
+    if (!employee) {
+      setSessions([]);
+      return;
+    }
+    getTodaySessionsFor(employee.id)
+      .then(setSessions)
+      .catch(() => setSessions([]));
+  };
 
   useEffect(() => {
     getCompanyProfile()
@@ -65,15 +83,7 @@ export function AttendanceFlow({
       .catch(() => toast.error("Gagal memuat pengaturan kantor."));
   }, []);
 
-  useEffect(() => {
-    if (!employee) {
-      setRecord(null);
-      return;
-    }
-    todayRecordFor(employee.id)
-      .then(setRecord)
-      .catch(() => setRecord(null));
-  }, [employee]);
+  useEffect(reloadSessions, [employee]);
 
   const officeRadiusMeters = company?.officeRadiusMeters ?? DEFAULT_OFFICE_RADIUS_METERS;
   const officeConfigured = company ? isOfficeLocationSet(company) : false;
@@ -83,11 +93,27 @@ export function AttendanceFlow({
     setOutsideConfirmed(false);
     setOutsideNote("");
     setOutsideTask("");
+    setLateInReasonText("");
+    setLateOutReasonText("");
     setPending({});
   };
 
   const proceedAfterGps = (partial: typeof pending) => {
     setPending((p) => ({ ...p, ...partial }));
+    const isFirstSessionToday = sessions.length === 0;
+    if (isFirstSessionToday && company && isPastSchedule(company.workStartTime, 15)) {
+      setDialog("late-in");
+      return;
+    }
+    if (!employee?.faceDescriptor) {
+      setDialog("enroll-needed");
+      return;
+    }
+    setDialog("verify");
+  };
+
+  const proceedAfterLateInReason = () => {
+    setPending((p) => ({ ...p, lateInReason: lateInReasonText.trim() }));
     if (!employee?.faceDescriptor) {
       setDialog("enroll-needed");
       return;
@@ -131,18 +157,31 @@ export function AttendanceFlow({
     );
   };
 
-  const handleClockOut = async () => {
+  const performClockOut = async (reason?: string) => {
     if (!employee) return;
     setBusy(true);
     try {
-      await clockOut(employee.id);
+      await clockOut(employee.id, reason);
       toast.success("Clock-out tercatat.");
+      resetFlow();
+      reloadSessions();
       onChange();
     } catch {
       toast.error("Gagal mencatat clock-out. Coba lagi.");
     } finally {
       setBusy(false);
     }
+  };
+
+  const handleClockOut = () => {
+    if (!employee || !openSession) return;
+    const needsReason =
+      !openSession.isOutsideOffice && company && isPastSchedule(company.workEndTime, 60);
+    if (needsReason) {
+      setDialog("late-out");
+      return;
+    }
+    performClockOut();
   };
 
   if (!employee) {
@@ -166,49 +205,75 @@ export function AttendanceFlow({
       )}
 
       <div className="flex flex-wrap gap-3">
-        <Button
-          onClick={handleClockIn}
-          disabled={!!record?.clockIn || gpsLoading || !company || busy}
-        >
+        <Button onClick={handleClockIn} disabled={!!openSession || gpsLoading || !company || busy}>
           <LogIn className="size-4" /> {gpsLoading ? "Mengambil lokasi…" : "Clock In"}
         </Button>
-        <Button
-          onClick={handleClockOut}
-          disabled={!record?.clockIn || !!record?.clockOut || busy}
-          variant="secondary"
-        >
+        <Button onClick={handleClockOut} disabled={!openSession || busy} variant="secondary">
           <LogOut className="size-4" /> Clock Out
         </Button>
       </div>
+      {sessions.length > 0 && !openSession && (
+        <p className="mt-2 text-xs text-muted-foreground">
+          Sudah clock-out. Boleh Clock In lagi hari ini kalau keluar-masuk tugas (dinas, kunjungan
+          klien, dll).
+        </p>
+      )}
 
-      {record && (
-        <div className="mt-4 flex flex-wrap items-center gap-3 text-sm text-muted-foreground">
-          <Badge variant="secondary">{record.status}</Badge>
-          {record.clockIn && (
-            <span>Masuk: {new Date(record.clockIn).toLocaleTimeString("id-ID")}</span>
-          )}
-          {record.clockOut && (
-            <span>Pulang: {new Date(record.clockOut).toLocaleTimeString("id-ID")}</span>
-          )}
-          {record.latIn && (
-            <span className="flex items-center gap-1">
-              <MapPin className="size-3.5" /> {record.latIn}, {record.longIn}
-            </span>
-          )}
-          {record.isOutsideOffice && (
-            <Badge variant="destructive" className="gap-1">
-              <AlertTriangle className="size-3" /> Di luar kantor (
-              {record.distanceMeters?.toFixed(0)}
-              m)
-            </Badge>
-          )}
-          {record.photoDataUrl && (
-            <img
-              src={record.photoDataUrl}
-              alt="Selfie absensi"
-              className="size-10 rounded-full border border-border object-cover"
-            />
-          )}
+      {sessions.length > 0 && (
+        <div className="mt-4 space-y-2">
+          <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+            <History className="size-3.5" /> Sesi hari ini ({sessions.length})
+          </p>
+          {sessions.map((record, i) => (
+            <div
+              key={record.id}
+              className="flex flex-wrap items-center gap-3 rounded-lg border border-border p-2.5 text-sm text-muted-foreground"
+            >
+              <span className="font-medium text-foreground">#{i + 1}</span>
+              <Badge variant="secondary">{record.status}</Badge>
+              {record.clockIn && (
+                <span>Masuk: {new Date(record.clockIn).toLocaleTimeString("id-ID")}</span>
+              )}
+              {record.clockOut && (
+                <span>Pulang: {new Date(record.clockOut).toLocaleTimeString("id-ID")}</span>
+              )}
+              {record.latIn && (
+                <span className="flex items-center gap-1">
+                  <MapPin className="size-3.5" /> {record.latIn}, {record.longIn}
+                </span>
+              )}
+              {record.isOutsideOffice && (
+                <Badge variant="destructive" className="gap-1">
+                  <AlertTriangle className="size-3" /> Di luar kantor (
+                  {record.distanceMeters?.toFixed(0)}
+                  m){record.outsideTaskStatus ? ` — ${record.outsideTaskStatus}` : ""}
+                </Badge>
+              )}
+              {record.photoDataUrl && (
+                <img
+                  src={record.photoDataUrl}
+                  alt="Selfie absensi"
+                  className="size-10 rounded-full border border-border object-cover"
+                />
+              )}
+              {(record.lateInReason || record.lateOutReason) && (
+                <div className="w-full text-xs">
+                  {record.lateInReason && (
+                    <p>
+                      <span className="text-amber-500">Alasan telat masuk:</span>{" "}
+                      {record.lateInReason}
+                    </p>
+                  )}
+                  {record.lateOutReason && (
+                    <p>
+                      <span className="text-amber-500">Alasan pulang telat:</span>{" "}
+                      {record.lateOutReason}
+                    </p>
+                  )}
+                </div>
+              )}
+            </div>
+          ))}
         </div>
       )}
 
@@ -277,6 +342,73 @@ export function AttendanceFlow({
         </DialogContent>
       </Dialog>
 
+      {/* Step 1b: late clock-in (>15 min past jam masuk) — reason required */}
+      <Dialog open={dialog === "late-in"} onOpenChange={(v) => !v && resetFlow()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <AlertTriangle className="size-5" />
+              Anda terlambat masuk
+            </DialogTitle>
+            <DialogDescription>
+              Sudah lebih dari 15 menit dari jam masuk ({company?.workStartTime}). Berikan alasan
+              keterlambatan — HRD akan memutuskan apakah perlu persetujuan atasan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Alasan Terlambat</Label>
+              <Input
+                className="mt-2"
+                value={lateInReasonText}
+                onChange={(e) => setLateInReasonText(e.target.value)}
+                placeholder="Contoh: Macet parah di tol dalam kota"
+              />
+            </div>
+            <DialogFooter className="sm:justify-center">
+              <Button disabled={!lateInReasonText.trim()} onClick={proceedAfterLateInReason}>
+                Lanjutkan ke FaceID
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
+      {/* Late clock-out (>60 min past jam pulang, non-field-duty) — reason required */}
+      <Dialog open={dialog === "late-out"} onOpenChange={(v) => !v && resetFlow()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <AlertTriangle className="size-5" />
+              Pulang lebih dari 60 menit dari jadwal
+            </DialogTitle>
+            <DialogDescription>
+              Jam pulang terjadwal {company?.workEndTime}. Berikan alasan — HRD akan memutuskan
+              apakah perlu persetujuan atasan.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Alasan</Label>
+              <Input
+                className="mt-2"
+                value={lateOutReasonText}
+                onChange={(e) => setLateOutReasonText(e.target.value)}
+                placeholder="Contoh: Menyelesaikan laporan bulanan"
+              />
+            </div>
+            <DialogFooter className="sm:justify-center">
+              <Button
+                disabled={!lateOutReasonText.trim() || busy}
+                onClick={() => performClockOut(lateOutReasonText.trim())}
+              >
+                {busy ? "Menyimpan…" : "Konfirmasi Clock Out"}
+              </Button>
+            </DialogFooter>
+          </div>
+        </DialogContent>
+      </Dialog>
+
       {/* Step 2a: employee has no enrolled face yet */}
       <Dialog open={dialog === "enroll-needed"} onOpenChange={(v) => !v && resetFlow()}>
         <DialogContent className="sm:max-w-sm">
@@ -320,6 +452,7 @@ export function AttendanceFlow({
                   ...(pending.outsideTaskStatus
                     ? { outsideTaskStatus: pending.outsideTaskStatus }
                     : {}),
+                  ...(pending.lateInReason ? { lateInReason: pending.lateInReason } : {}),
                   photoDataUrl: result.photoDataUrl,
                 });
                 toast.success("Absensi berhasil — wajah terverifikasi.");
@@ -332,6 +465,7 @@ export function AttendanceFlow({
               );
             }
             resetFlow();
+            reloadSessions();
             onChange();
           }}
         />
