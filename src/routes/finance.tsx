@@ -40,6 +40,7 @@ import {
   isSeniorPositionLevel,
   type Employee,
 } from "@/lib/hris-data";
+import { getMenuPermissions, isMenuAllowed, type PermissionMap } from "@/lib/menu-permissions-data";
 
 export const Route = createFileRoute("/finance")({
   head: () => ({
@@ -62,6 +63,7 @@ function FinancePage() {
   const [employees, setEmployees] = useState<Employee[]>([]);
   const [loading, setLoading] = useState(true);
   const [editing, setEditing] = useState<Employee | null>(null);
+  const [permMap, setPermMap] = useState<PermissionMap>({});
 
   useEffect(() => {
     const s = getActiveSession();
@@ -76,6 +78,9 @@ function FinancePage() {
       return;
     }
     setSession(s);
+    getMenuPermissions("finance")
+      .then(setPermMap)
+      .catch(() => setPermMap({}));
   }, [navigate]);
 
   const refresh = () => {
@@ -91,6 +96,10 @@ function FinancePage() {
   }, [session]);
 
   if (!session) return null;
+
+  const fullMenuAccess = isTopAdmin(session) || isDeveloperAdmin(session);
+  const visible = (menuKey: string) =>
+    fullMenuAccess || isMenuAllowed(permMap, session.role, menuKey);
 
   // Direktur (SUPER_ADMIN di Finance) dan akun developer Aurora melihat semua
   // level, termasuk Kepala Divisi/GM/Direktur. Head Finance & Admin Finance
@@ -130,70 +139,72 @@ function FinancePage() {
         </div>
       )}
 
-      <section className="glass-panel overflow-hidden">
-        {loading ? (
-          <p className="p-7 text-sm text-muted-foreground">Memuat…</p>
-        ) : visibleEmployees.length === 0 ? (
-          <p className="p-7 text-sm text-muted-foreground">Belum ada data karyawan.</p>
-        ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nama</TableHead>
-                <TableHead>Jabatan</TableHead>
-                <TableHead>Level</TableHead>
-                <TableHead>Gaji Pokok</TableHead>
-                <TableHead>Tunjangan Tetap/Bulan</TableHead>
-                <TableHead>Tunjangan Makan</TableHead>
-                <TableHead>Rekening Bank</TableHead>
-                {canEdit && <TableHead />}
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {visibleEmployees.map((e) => {
-                const fixedMonthlyAllowance =
-                  (e.transportAllowance ?? 0) +
-                  (e.positionAllowance ?? 0) +
-                  (e.healthAllowance ?? 0) +
-                  (e.insuranceAllowance ?? 0);
-                return (
-                  <TableRow key={e.id}>
-                    <TableCell>{e.fullName}</TableCell>
-                    <TableCell>{e.position || "—"}</TableCell>
-                    <TableCell>
-                      <Badge variant="secondary">{e.positionLevel}</Badge>
-                    </TableCell>
-                    <TableCell>{rupiah(e.basicSalary ?? 0)}</TableCell>
-                    <TableCell>{rupiah(fixedMonthlyAllowance)}</TableCell>
-                    <TableCell className="text-xs text-muted-foreground">
-                      {rupiah(e.mealAllowance ?? 0)}/hari
-                    </TableCell>
-                    <TableCell className="text-xs">
-                      {e.bankName ? (
-                        <>
-                          <p>{e.bankName}</p>
-                          <p className="font-mono text-muted-foreground">
-                            {e.bankAccountNumber} — {e.bankAccountHolder}
-                          </p>
-                        </>
-                      ) : (
-                        <Badge variant="outline">Belum diisi</Badge>
-                      )}
-                    </TableCell>
-                    {canEdit && (
+      {visible("salary-view") && (
+        <section className="glass-panel overflow-hidden">
+          {loading ? (
+            <p className="p-7 text-sm text-muted-foreground">Memuat…</p>
+          ) : visibleEmployees.length === 0 ? (
+            <p className="p-7 text-sm text-muted-foreground">Belum ada data karyawan.</p>
+          ) : (
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead>Nama</TableHead>
+                  <TableHead>Jabatan</TableHead>
+                  <TableHead>Level</TableHead>
+                  <TableHead>Gaji Pokok</TableHead>
+                  <TableHead>Tunjangan Tetap/Bulan</TableHead>
+                  <TableHead>Tunjangan Makan</TableHead>
+                  <TableHead>Rekening Bank</TableHead>
+                  {canEdit && <TableHead />}
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {visibleEmployees.map((e) => {
+                  const fixedMonthlyAllowance =
+                    (e.transportAllowance ?? 0) +
+                    (e.positionAllowance ?? 0) +
+                    (e.healthAllowance ?? 0) +
+                    (e.insuranceAllowance ?? 0);
+                  return (
+                    <TableRow key={e.id}>
+                      <TableCell>{e.fullName}</TableCell>
+                      <TableCell>{e.position || "—"}</TableCell>
                       <TableCell>
-                        <Button size="sm" variant="outline" onClick={() => setEditing(e)}>
-                          <Pencil className="size-3.5" />
-                        </Button>
+                        <Badge variant="secondary">{e.positionLevel}</Badge>
                       </TableCell>
-                    )}
-                  </TableRow>
-                );
-              })}
-            </TableBody>
-          </Table>
-        )}
-      </section>
+                      <TableCell>{rupiah(e.basicSalary ?? 0)}</TableCell>
+                      <TableCell>{rupiah(fixedMonthlyAllowance)}</TableCell>
+                      <TableCell className="text-xs text-muted-foreground">
+                        {rupiah(e.mealAllowance ?? 0)}/hari
+                      </TableCell>
+                      <TableCell className="text-xs">
+                        {e.bankName ? (
+                          <>
+                            <p>{e.bankName}</p>
+                            <p className="font-mono text-muted-foreground">
+                              {e.bankAccountNumber} — {e.bankAccountHolder}
+                            </p>
+                          </>
+                        ) : (
+                          <Badge variant="outline">Belum diisi</Badge>
+                        )}
+                      </TableCell>
+                      {canEdit && (
+                        <TableCell>
+                          <Button size="sm" variant="outline" onClick={() => setEditing(e)}>
+                            <Pencil className="size-3.5" />
+                          </Button>
+                        </TableCell>
+                      )}
+                    </TableRow>
+                  );
+                })}
+              </TableBody>
+            </Table>
+          )}
+        </section>
+      )}
 
       {editing && (
         <FinanceEditDialog
@@ -206,9 +217,9 @@ function FinancePage() {
         />
       )}
 
-      <ContactListSection />
+      {visible("contacts") && <ContactListSection />}
 
-      {session && (
+      {visible("chat") && (
         <div className="glass-panel p-7">
           <ChatSection
             me={{

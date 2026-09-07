@@ -3,7 +3,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ContactListSection } from "@/components/ContactListSection";
 import { ChatSection } from "@/components/ChatSection";
-import { getActiveSession } from "@/lib/admin-auth";
+import { getActiveSession, isTopAdmin, isDeveloperAdmin } from "@/lib/admin-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -41,6 +41,7 @@ import {
   type VacancyStatus,
 } from "@/lib/ats-data";
 import type { EmploymentStatus, PtkpStatus } from "@/lib/hris-data";
+import { getMenuPermissions, isMenuAllowed, type PermissionMap } from "@/lib/menu-permissions-data";
 
 export const Route = createFileRoute("/ats")({
   head: () => ({
@@ -66,6 +67,7 @@ function AtsPage() {
   const [ready, setReady] = useState(false);
   const [vacancies, setVacancies] = useState<JobVacancy[]>([]);
   const [applicants, setApplicants] = useState<Applicant[]>([]);
+  const [permMap, setPermMap] = useState<PermissionMap>({});
 
   useEffect(() => {
     if (!getActiveSession()) {
@@ -75,9 +77,17 @@ function AtsPage() {
     setReady(true);
     setVacancies(getVacancies());
     setApplicants(getApplicants());
+    getMenuPermissions("ats")
+      .then(setPermMap)
+      .catch(() => setPermMap({}));
   }, [navigate]);
 
   if (!ready) return null;
+
+  const session = getActiveSession();
+  const fullMenuAccess = !!session && (isTopAdmin(session) || isDeveloperAdmin(session));
+  const visible = (menuKey: string) =>
+    fullMenuAccess || !session || isMenuAllowed(permMap, session.role, menuKey);
 
   const refresh = () => {
     setVacancies(getVacancies());
@@ -91,41 +101,44 @@ function AtsPage() {
     >
       <Tabs defaultValue="vacancies">
         <TabsList>
-          <TabsTrigger value="vacancies">Job Board</TabsTrigger>
-          <TabsTrigger value="pipeline">Pipeline Kandidat</TabsTrigger>
-          <TabsTrigger value="contacts">Contact List</TabsTrigger>
-          <TabsTrigger value="chat">Chat</TabsTrigger>
+          {visible("vacancies") && <TabsTrigger value="vacancies">Job Board</TabsTrigger>}
+          {visible("pipeline") && <TabsTrigger value="pipeline">Pipeline Kandidat</TabsTrigger>}
+          {visible("contacts") && <TabsTrigger value="contacts">Contact List</TabsTrigger>}
+          {visible("chat") && <TabsTrigger value="chat">Chat</TabsTrigger>}
         </TabsList>
 
-        <TabsContent value="vacancies" className="mt-6">
-          <VacancyTab vacancies={vacancies} onChange={refresh} />
-        </TabsContent>
+        {visible("vacancies") && (
+          <TabsContent value="vacancies" className="mt-6">
+            <VacancyTab vacancies={vacancies} onChange={refresh} />
+          </TabsContent>
+        )}
 
-        <TabsContent value="pipeline" className="mt-6">
-          <PipelineTab vacancies={vacancies} applicants={applicants} onChange={refresh} />
-        </TabsContent>
+        {visible("pipeline") && (
+          <TabsContent value="pipeline" className="mt-6">
+            <PipelineTab vacancies={vacancies} applicants={applicants} onChange={refresh} />
+          </TabsContent>
+        )}
 
-        <TabsContent value="contacts" className="mt-6">
-          <ContactListSection />
-        </TabsContent>
+        {visible("contacts") && (
+          <TabsContent value="contacts" className="mt-6">
+            <ContactListSection />
+          </TabsContent>
+        )}
 
-        <TabsContent value="chat" className="mt-6">
-          {(() => {
-            const session = getActiveSession();
-            return (
-              session && (
-                <ChatSection
-                  me={{
-                    type: "admin",
-                    id: session.id,
-                    userId: session.userId,
-                    fullName: session.fullName,
-                  }}
-                />
-              )
-            );
-          })()}
-        </TabsContent>
+        {visible("chat") && (
+          <TabsContent value="chat" className="mt-6">
+            {session && (
+              <ChatSection
+                me={{
+                  type: "admin",
+                  id: session.id,
+                  userId: session.userId,
+                  fullName: session.fullName,
+                }}
+              />
+            )}
+          </TabsContent>
+        )}
       </Tabs>
 
       <section className="glass-panel p-7">

@@ -1,7 +1,7 @@
 import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import { getActiveSession } from "@/lib/admin-auth";
+import { getActiveSession, isTopAdmin, isDeveloperAdmin } from "@/lib/admin-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -109,6 +109,12 @@ import {
 } from "@/lib/hris-data";
 import { getCompanyProfile, getPreviousPayrollPeriod } from "@/lib/company-data";
 import {
+  getPendingHrdOutsideRequests,
+  decideOutsideRequestAsHrd,
+  type OutsideAttendanceRequest,
+} from "@/lib/outside-attendance-data";
+import { getMenuPermissions, isMenuAllowed, type PermissionMap } from "@/lib/menu-permissions-data";
+import {
   getStaffAccounts,
   createStaffAccount,
   resetStaffAccountToDefaultPin,
@@ -153,6 +159,7 @@ function HrisPage() {
   const [attendance, setAttendance] = useState<AttendanceRecord[]>([]);
   const [staffAccounts, setStaffAccounts] = useState<StaffAccount[]>([]);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
+  const [permMap, setPermMap] = useState<PermissionMap>({});
 
   const refresh = async () => {
     setLoading(true);
@@ -181,9 +188,17 @@ function HrisPage() {
     }
     setReady(true);
     refresh();
+    getMenuPermissions("hris")
+      .then(setPermMap)
+      .catch(() => setPermMap({}));
   }, [navigate]);
 
   if (!ready) return null;
+
+  const session = getActiveSession();
+  const fullMenuAccess = !!session && (isTopAdmin(session) || isDeveloperAdmin(session));
+  const visible = (menuKey: string) =>
+    fullMenuAccess || !session || isMenuAllowed(permMap, session.role, menuKey);
 
   return (
     <AppShell
@@ -195,71 +210,101 @@ function HrisPage() {
       ) : (
         <Tabs defaultValue="employees">
           <TabsList>
-            <TabsTrigger value="employees">Database Karyawan</TabsTrigger>
-            <TabsTrigger value="locations">Lokasi</TabsTrigger>
-            <TabsTrigger value="shifts">Jam Kerja</TabsTrigger>
-            <TabsTrigger value="attendance">Absensi GPS</TabsTrigger>
-            <TabsTrigger value="final-report">Laporan Akhir</TabsTrigger>
-            <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
-            <TabsTrigger value="announcements">Pengumuman</TabsTrigger>
-            <TabsTrigger value="contacts">Contact List</TabsTrigger>
-            <TabsTrigger value="chat">Chat</TabsTrigger>
-            <TabsTrigger value="payroll">Payroll</TabsTrigger>
+            {visible("employees") && <TabsTrigger value="employees">Database Karyawan</TabsTrigger>}
+            {visible("locations") && <TabsTrigger value="locations">Lokasi</TabsTrigger>}
+            {visible("shifts") && <TabsTrigger value="shifts">Jam Kerja</TabsTrigger>}
+            {visible("attendance") && <TabsTrigger value="attendance">Absensi GPS</TabsTrigger>}
+            {visible("final-report") && (
+              <TabsTrigger value="final-report">Laporan Akhir</TabsTrigger>
+            )}
+            {visible("outside-requests") && (
+              <TabsTrigger value="outside-requests">Pengajuan Absensi Luar</TabsTrigger>
+            )}
+            {visible("staff-accounts") && (
+              <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
+            )}
+            {visible("announcements") && (
+              <TabsTrigger value="announcements">Pengumuman</TabsTrigger>
+            )}
+            {visible("contacts") && <TabsTrigger value="contacts">Contact List</TabsTrigger>}
+            {visible("chat") && <TabsTrigger value="chat">Chat</TabsTrigger>}
+            {visible("payroll") && <TabsTrigger value="payroll">Payroll</TabsTrigger>}
           </TabsList>
 
-          <TabsContent value="employees" className="mt-6">
-            <EmployeeTab employees={employees} accounts={staffAccounts} onChange={refresh} />
-          </TabsContent>
+          {visible("employees") && (
+            <TabsContent value="employees" className="mt-6">
+              <EmployeeTab employees={employees} accounts={staffAccounts} onChange={refresh} />
+            </TabsContent>
+          )}
 
-          <TabsContent value="locations" className="mt-6">
-            <LocationsTab />
-          </TabsContent>
+          {visible("locations") && (
+            <TabsContent value="locations" className="mt-6">
+              <LocationsTab />
+            </TabsContent>
+          )}
 
-          <TabsContent value="shifts" className="mt-6">
-            <ShiftsTab employees={employees} onChange={refresh} />
-          </TabsContent>
+          {visible("shifts") && (
+            <TabsContent value="shifts" className="mt-6">
+              <ShiftsTab employees={employees} onChange={refresh} />
+            </TabsContent>
+          )}
 
-          <TabsContent value="attendance" className="mt-6">
-            <AttendanceTab employees={employees} attendance={attendance} onChange={refresh} />
-          </TabsContent>
+          {visible("attendance") && (
+            <TabsContent value="attendance" className="mt-6">
+              <AttendanceTab employees={employees} attendance={attendance} onChange={refresh} />
+            </TabsContent>
+          )}
 
-          <TabsContent value="final-report" className="mt-6">
-            <FinalReportTab employees={employees} />
-          </TabsContent>
+          {visible("final-report") && (
+            <TabsContent value="final-report" className="mt-6">
+              <FinalReportTab employees={employees} />
+            </TabsContent>
+          )}
 
-          <TabsContent value="staff-accounts" className="mt-6">
-            <StaffAccountsTab employees={employees} accounts={staffAccounts} onChange={refresh} />
-          </TabsContent>
+          {visible("outside-requests") && (
+            <TabsContent value="outside-requests" className="mt-6">
+              <OutsideAttendanceRequestsTab employees={employees} />
+            </TabsContent>
+          )}
 
-          <TabsContent value="announcements" className="mt-6">
-            <AnnouncementsTab />
-          </TabsContent>
+          {visible("staff-accounts") && (
+            <TabsContent value="staff-accounts" className="mt-6">
+              <StaffAccountsTab employees={employees} accounts={staffAccounts} onChange={refresh} />
+            </TabsContent>
+          )}
 
-          <TabsContent value="contacts" className="mt-6">
-            <ContactListSection />
-          </TabsContent>
+          {visible("announcements") && (
+            <TabsContent value="announcements" className="mt-6">
+              <AnnouncementsTab />
+            </TabsContent>
+          )}
 
-          <TabsContent value="chat" className="mt-6">
-            {(() => {
-              const session = getActiveSession();
-              return (
-                session && (
-                  <ChatSection
-                    me={{
-                      type: "admin",
-                      id: session.id,
-                      userId: session.userId,
-                      fullName: session.fullName,
-                    }}
-                  />
-                )
-              );
-            })()}
-          </TabsContent>
+          {visible("contacts") && (
+            <TabsContent value="contacts" className="mt-6">
+              <ContactListSection />
+            </TabsContent>
+          )}
 
-          <TabsContent value="payroll" className="mt-6">
-            <PayrollTab employees={employees} payrolls={payrolls} onChange={refresh} />
-          </TabsContent>
+          {visible("chat") && (
+            <TabsContent value="chat" className="mt-6">
+              {session && (
+                <ChatSection
+                  me={{
+                    type: "admin",
+                    id: session.id,
+                    userId: session.userId,
+                    fullName: session.fullName,
+                  }}
+                />
+              )}
+            </TabsContent>
+          )}
+
+          {visible("payroll") && (
+            <TabsContent value="payroll" className="mt-6">
+              <PayrollTab employees={employees} payrolls={payrolls} onChange={refresh} />
+            </TabsContent>
+          )}
         </Tabs>
       )}
     </AppShell>
@@ -1514,6 +1559,122 @@ function FinalReportTab({ employees }: { employees: Employee[] }) {
               })}
             </TableBody>
           </Table>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function OutsideAttendanceRequestsTab({ employees }: { employees: Employee[] }) {
+  const [items, setItems] = useState<OutsideAttendanceRequest[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [decidingId, setDecidingId] = useState<string | null>(null);
+  const [notes, setNotes] = useState<Record<string, string>>({});
+
+  const employeeById = new Map(employees.map((e) => [e.id, e]));
+
+  const refresh = () => {
+    setLoading(true);
+    getPendingHrdOutsideRequests()
+      .then(setItems)
+      .catch(() => toast.error("Gagal memuat pengajuan."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(refresh, []);
+
+  const handleDecide = async (
+    request: OutsideAttendanceRequest,
+    decision: "APPROVED" | "REJECTED" | "FORWARD",
+  ) => {
+    setDecidingId(request.id);
+    try {
+      await decideOutsideRequestAsHrd(request, decision, notes[request.id]);
+      toast.success(
+        decision === "APPROVED"
+          ? "Disetujui — absensi otomatis tercatat."
+          : decision === "REJECTED"
+            ? "Ditolak."
+            : "Di-forward ke atasan karyawan untuk keputusan akhir.",
+      );
+      refresh();
+    } catch (err) {
+      toast.error(err instanceof Error ? err.message : "Gagal memproses. Coba lagi.");
+    } finally {
+      setDecidingId(null);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-base font-semibold">Pengajuan Absensi Luar Area</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Muncul di sini kalau kebijakan "Izinkan Absensi di Luar Area" dimatikan di Pengaturan.
+          Setujui langsung, tolak, atau forward ke atasan karyawan untuk keputusan akhir.
+        </p>
+      </div>
+
+      <section className="glass-panel overflow-hidden">
+        {loading ? (
+          <p className="p-7 text-sm text-muted-foreground">Memuat…</p>
+        ) : items.length === 0 ? (
+          <p className="p-7 text-sm text-muted-foreground">Tidak ada pengajuan menunggu.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {items.map((r) => {
+              const emp = employeeById.get(r.employeeId);
+              return (
+                <li key={r.id} className="space-y-2 p-4">
+                  <div className="flex items-center justify-between">
+                    <p className="font-medium">
+                      {emp?.fullName ?? "Karyawan"} —{" "}
+                      {r.action === "clock_in" ? "Clock In" : "Clock Out"}
+                    </p>
+                    <Badge variant="secondary">{r.distanceMeters?.toFixed(0)}m dari lokasi</Badge>
+                  </div>
+                  <p className="text-xs text-muted-foreground">
+                    {new Date(r.requestedAt).toLocaleString("id-ID")} · {r.locationNote}
+                    {r.taskStatus ? ` · ${r.taskStatus}` : ""}
+                  </p>
+                  <Textarea
+                    rows={2}
+                    placeholder="Catatan keputusan (opsional)"
+                    value={notes[r.id] ?? ""}
+                    onChange={(e) => setNotes({ ...notes, [r.id]: e.target.value })}
+                  />
+                  <div className="flex gap-2">
+                    <Button
+                      size="sm"
+                      className="flex-1"
+                      disabled={decidingId === r.id}
+                      onClick={() => handleDecide(r, "APPROVED")}
+                    >
+                      Setujui
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      disabled={decidingId === r.id}
+                      onClick={() => handleDecide(r, "FORWARD")}
+                    >
+                      Forward ke Atasan
+                    </Button>
+                    <Button
+                      size="sm"
+                      variant="outline"
+                      className="flex-1"
+                      disabled={decidingId === r.id}
+                      onClick={() => handleDecide(r, "REJECTED")}
+                    >
+                      Tolak
+                    </Button>
+                  </div>
+                </li>
+              );
+            })}
+          </ul>
         )}
       </section>
     </div>
