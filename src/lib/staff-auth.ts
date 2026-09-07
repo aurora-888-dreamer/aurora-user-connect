@@ -1,5 +1,5 @@
 /**
- * Staff self-service accounts — separate from hpm_admin_users (aurora-id.ts).
+ * Staff self-service accounts — separate from hpm_admin_users (admin-auth.ts).
  * User_ID uses the SAME formula already used across Noble/Magic Talk/Database
  * Master: 5 letters from the name + country dial code + last 3 digits of the
  * WhatsApp number (e.g. "SANTY62296").

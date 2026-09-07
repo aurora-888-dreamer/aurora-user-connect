@@ -4,7 +4,7 @@
  *
  * MIGRATED from localStorage to Supabase (`hpm_companies`). This app is
  * currently single-tenant (one deployed instance = one company), and admin
- * login (see `aurora-id.ts`) is not yet company-aware — so instead of
+ * login (see `admin-auth.ts`) is not yet company-aware — so instead of
  * threading a real company_id through a login session, we resolve/bootstrap
  * a single company row and cache its id in memory for the lifetime of the
  * tab. This keeps every other table's `company_id` foreign key satisfied
