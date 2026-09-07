@@ -4,8 +4,23 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
-import { ArrowLeft, Lock, ScanFace, IdCard, Upload, Loader2, CheckCircle2, AlertTriangle } from "lucide-react";
-import { getStaffSession, updateStaffAccount, type StaffAccount } from "@/lib/staff-auth";
+import {
+  ArrowLeft,
+  Lock,
+  ScanFace,
+  IdCard,
+  Upload,
+  Loader2,
+  CheckCircle2,
+  AlertTriangle,
+  RotateCcw,
+} from "lucide-react";
+import {
+  getStaffSession,
+  updateStaffAccount,
+  type StaffAccount,
+  type KtpExtracted,
+} from "@/lib/staff-auth";
 import { FaceCaptureDialog } from "@/components/FaceCaptureDialog";
 import { getEmployeeById } from "@/lib/hris-data";
 import { readKtpPhoto, niksMatch } from "@/lib/ktp-ocr";
@@ -26,6 +41,11 @@ function StaffProfilePage() {
 
   const [ktpFileUrl, setKtpFileUrl] = useState<string | null>(null);
   const [ktpBusy, setKtpBusy] = useState(false);
+  const [ktpPreview, setKtpPreview] = useState<{
+    dataUrl: string;
+    extracted: KtpExtracted | null;
+    match: boolean;
+  } | null>(null);
   const ktpInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -65,38 +85,64 @@ function StaffProfilePage() {
     const reader = new FileReader();
     reader.onload = async () => {
       const dataUrl = reader.result as string;
-      setKtpFileUrl(dataUrl);
       setKtpBusy(true);
+      setKtpPreview(null);
       try {
-        // Save the photo itself right away, so it's not lost even if the AI read fails.
-        await updateStaffAccount(account.id, { ktpPhoto: dataUrl });
-
+        // Preview only — nothing is saved to the account/HRIS yet.
         const { extracted } = await readKtpPhoto(dataUrl);
         if (!extracted) {
-          toast.error("Foto tidak terbaca sebagai KTP. Coba foto ulang, pastikan cahaya cukup & teks jelas.");
+          toast.error(
+            "Foto tidak terbaca sebagai KTP. Coba foto ulang, pastikan cahaya cukup & teks jelas.",
+          );
+          setKtpPreview({ dataUrl, extracted: null, match: false });
           return;
         }
-
         const employee = account.employeeId ? await getEmployeeById(account.employeeId) : null;
         const match = niksMatch(extracted.nik, employee?.nik);
-
-        await updateStaffAccount(account.id, { ktpExtracted: extracted, ktpNikMatch: match });
-        setAccount({ ...account, ktpPhoto: dataUrl, ktpExtracted: extracted, ktpNikMatch: match });
-
-        if (match) {
-          toast.success("KTP terbaca dan NIK cocok dengan data karyawan.");
-        } else {
+        setKtpPreview({ dataUrl, extracted, match });
+        if (!match) {
           toast.error(
-            "NIK di foto KTP TIDAK cocok dengan NIK yang terdaftar di data karyawan. Hubungi HR untuk memperbaiki data NIK.",
+            "NIK di foto KTP tidak cocok dengan data karyawan. Silakan ambil ulang foto yang benar.",
           );
         }
       } catch {
         toast.error("Gagal membaca KTP lewat AI. Coba lagi sebentar.");
+        setKtpPreview({ dataUrl, extracted: null, match: false });
       } finally {
         setKtpBusy(false);
       }
     };
     reader.readAsDataURL(file);
+  };
+
+  const handleConfirmKtp = async () => {
+    if (!ktpPreview || !ktpPreview.match) return;
+    setKtpBusy(true);
+    try {
+      await updateStaffAccount(account.id, {
+        ktpPhoto: ktpPreview.dataUrl,
+        ktpExtracted: ktpPreview.extracted ?? undefined,
+        ktpNikMatch: ktpPreview.match,
+      });
+      setKtpFileUrl(ktpPreview.dataUrl);
+      setAccount({
+        ...account,
+        ktpPhoto: ktpPreview.dataUrl,
+        ktpExtracted: ktpPreview.extracted ?? undefined,
+        ktpNikMatch: ktpPreview.match,
+      });
+      setKtpPreview(null);
+      toast.success("Foto KTP disimpan & dikirim ke HRIS.");
+    } catch {
+      toast.error("Gagal menyimpan foto KTP. Coba lagi.");
+    } finally {
+      setKtpBusy(false);
+    }
+  };
+
+  const handleRetakeKtp = () => {
+    setKtpPreview(null);
+    ktpInputRef.current?.click();
   };
 
   return (
@@ -153,7 +199,11 @@ function StaffProfilePage() {
 
         <div className="mx-auto aspect-square w-40 overflow-hidden rounded-2xl border border-border bg-muted">
           {account.facePhoto ? (
-            <img src={account.facePhoto} alt="Foto FaceID terdaftar" className="h-full w-full object-cover" />
+            <img
+              src={account.facePhoto}
+              alt="Foto FaceID terdaftar"
+              className="h-full w-full object-cover"
+            />
           ) : (
             <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
               Belum ada foto
@@ -177,7 +227,12 @@ function StaffProfilePage() {
                 facePhoto: photoDataUrl,
                 faceEnrolled: true,
               });
-              setAccount({ ...account, faceDescriptor: descriptor, facePhoto: photoDataUrl, faceEnrolled: true });
+              setAccount({
+                ...account,
+                faceDescriptor: descriptor,
+                facePhoto: photoDataUrl,
+                faceEnrolled: true,
+              });
               setShowFaceDialog(false);
               toast.success("FaceID diperbarui.");
             }}
@@ -185,35 +240,140 @@ function StaffProfilePage() {
         )}
       </div>
 
-      {/* ---------- KTP: capture/upload + AI read + NIK match check ---------- */}
+      {/* ---------- KTP: capture/upload + AI read + preview-before-save ---------- */}
       <div className="glass-panel mx-auto mt-5 max-w-md space-y-4 p-6">
         <h2 className="flex items-center gap-2 text-base font-semibold">
           <IdCard className="size-5 text-primary" /> Foto KTP
         </h2>
         <p className="text-xs text-muted-foreground">
-          Foto/screenshot KTP dibaca otomatis oleh AI dan dicocokkan dengan NIK yang terdaftar di data
-          karyawan.
+          Foto/screenshot KTP dibaca otomatis oleh AI. Hasilnya di-preview dulu di sini — baru
+          tersimpan &amp; terkirim ke HRIS kalau kamu konfirmasi.
         </p>
 
-        <div className="mx-auto aspect-[16/10] w-full overflow-hidden rounded-2xl border border-border bg-muted">
-          {ktpFileUrl ? (
-            <img src={ktpFileUrl} alt="Foto KTP" className="h-full w-full object-cover" />
-          ) : (
-            <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
-              Belum ada foto KTP
+        {!ktpPreview ? (
+          <>
+            <div className="mx-auto aspect-[16/10] w-full overflow-hidden rounded-2xl border border-border bg-muted">
+              {ktpFileUrl ? (
+                <img src={ktpFileUrl} alt="Foto KTP" className="h-full w-full object-cover" />
+              ) : (
+                <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                  Belum ada foto KTP
+                </div>
+              )}
             </div>
-          )}
-        </div>
 
-        <Button
-          className="w-full"
-          variant="outline"
-          disabled={ktpBusy}
-          onClick={() => ktpInputRef.current?.click()}
-        >
-          {ktpBusy ? <Loader2 className="size-4 animate-spin" /> : <Upload className="size-4" />}
-          {ktpFileUrl ? "Ganti Foto KTP" : "Ambil / Unggah Foto KTP"}
-        </Button>
+            <Button
+              className="w-full"
+              variant="outline"
+              disabled={ktpBusy}
+              onClick={() => ktpInputRef.current?.click()}
+            >
+              {ktpBusy ? (
+                <Loader2 className="size-4 animate-spin" />
+              ) : (
+                <Upload className="size-4" />
+              )}
+              {ktpFileUrl ? "Ganti Foto KTP" : "Ambil / Unggah Foto KTP"}
+            </Button>
+
+            {account.ktpExtracted && (
+              <div className="space-y-2 rounded-xl border border-border p-4 text-sm">
+                {account.ktpNikMatch ? (
+                  <p className="flex items-center gap-1.5 text-primary">
+                    <CheckCircle2 className="size-4" /> NIK cocok dengan data karyawan
+                  </p>
+                ) : (
+                  <p className="flex items-center gap-1.5 text-destructive">
+                    <AlertTriangle className="size-4" /> NIK TIDAK cocok — hubungi HR untuk perbaiki
+                    data NIK
+                  </p>
+                )}
+                <p>
+                  <span className="text-muted-foreground">NIK di KTP:</span>{" "}
+                  <span className="font-mono">{account.ktpExtracted.nik || "-"}</span>
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Nama di KTP:</span>{" "}
+                  {account.ktpExtracted.fullName || "-"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Alamat:</span>{" "}
+                  {account.ktpExtracted.address || "-"}
+                </p>
+              </div>
+            )}
+          </>
+        ) : (
+          <div className="space-y-4">
+            <div className="mx-auto aspect-[16/10] w-full overflow-hidden rounded-2xl border border-border bg-muted">
+              <img
+                src={ktpPreview.dataUrl}
+                alt="Preview foto KTP"
+                className="h-full w-full object-cover"
+              />
+            </div>
+
+            {ktpBusy && (
+              <p className="flex items-center justify-center gap-2 text-sm text-muted-foreground">
+                <Loader2 className="size-4 animate-spin" /> Membaca KTP dengan AI…
+              </p>
+            )}
+
+            {!ktpBusy && ktpPreview.extracted && (
+              <div className="space-y-2 rounded-xl border border-border p-4 text-sm">
+                <p className="font-medium">Preview hasil baca AI — periksa dulu sebelum simpan:</p>
+                <p>
+                  <span className="text-muted-foreground">NIK:</span>{" "}
+                  <span className="font-mono">{ktpPreview.extracted.nik || "-"}</span>
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Nama:</span>{" "}
+                  {ktpPreview.extracted.fullName || "-"}
+                </p>
+                <p>
+                  <span className="text-muted-foreground">Alamat:</span>{" "}
+                  {ktpPreview.extracted.address || "-"}
+                </p>
+                {ktpPreview.match ? (
+                  <p className="flex items-center gap-1.5 text-primary">
+                    <CheckCircle2 className="size-4" /> NIK cocok dengan data karyawan — aman
+                    disimpan
+                  </p>
+                ) : (
+                  <p className="flex items-center gap-1.5 text-destructive">
+                    <AlertTriangle className="size-4" /> NIK tidak cocok data karyawan. Jangan
+                    disimpan — ambil ulang foto yang benar, atau hubungi HR kalau data NIK di HRIS
+                    yang salah.
+                  </p>
+                )}
+              </div>
+            )}
+
+            {!ktpBusy && !ktpPreview.extracted && (
+              <p className="flex items-center gap-1.5 text-sm text-destructive">
+                <AlertTriangle className="size-4" /> Foto tidak terbaca sebagai KTP. Ambil ulang
+                dengan pencahayaan yang lebih baik.
+              </p>
+            )}
+
+            <div className="flex gap-2">
+              <Button
+                variant="outline"
+                className="flex-1"
+                onClick={handleRetakeKtp}
+                disabled={ktpBusy}
+              >
+                <RotateCcw className="size-4" /> Ambil Ulang
+              </Button>
+              {ktpPreview.match && (
+                <Button className="flex-1" onClick={handleConfirmKtp} disabled={ktpBusy}>
+                  {ktpBusy ? "Menyimpan…" : "Konfirmasi & Simpan"}
+                </Button>
+              )}
+            </div>
+          </div>
+        )}
+
         <input
           ref={ktpInputRef}
           type="file"
@@ -222,32 +382,6 @@ function StaffProfilePage() {
           className="hidden"
           onChange={handleKtpFileChosen}
         />
-
-        {account.ktpExtracted && (
-          <div className="space-y-2 rounded-xl border border-border p-4 text-sm">
-            {account.ktpNikMatch ? (
-              <p className="flex items-center gap-1.5 text-primary">
-                <CheckCircle2 className="size-4" /> NIK cocok dengan data karyawan
-              </p>
-            ) : (
-              <p className="flex items-center gap-1.5 text-destructive">
-                <AlertTriangle className="size-4" /> NIK TIDAK cocok — hubungi HR untuk perbaiki data NIK
-              </p>
-            )}
-            <p>
-              <span className="text-muted-foreground">NIK di KTP:</span>{" "}
-              <span className="font-mono">{account.ktpExtracted.nik || "-"}</span>
-            </p>
-            <p>
-              <span className="text-muted-foreground">Nama di KTP:</span>{" "}
-              {account.ktpExtracted.fullName || "-"}
-            </p>
-            <p>
-              <span className="text-muted-foreground">Alamat:</span>{" "}
-              {account.ktpExtracted.address || "-"}
-            </p>
-          </div>
-        )}
       </div>
     </div>
   );
