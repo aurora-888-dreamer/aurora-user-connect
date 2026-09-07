@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ContactListSection } from "@/components/ContactListSection";
+import { ChatSection } from "@/components/ChatSection";
 import { getActiveSession } from "@/lib/admin-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -93,6 +94,7 @@ function AtsPage() {
           <TabsTrigger value="vacancies">Job Board</TabsTrigger>
           <TabsTrigger value="pipeline">Pipeline Kandidat</TabsTrigger>
           <TabsTrigger value="contacts">Contact List</TabsTrigger>
+          <TabsTrigger value="chat">Chat</TabsTrigger>
         </TabsList>
 
         <TabsContent value="vacancies" className="mt-6">
@@ -105,6 +107,24 @@ function AtsPage() {
 
         <TabsContent value="contacts" className="mt-6">
           <ContactListSection />
+        </TabsContent>
+
+        <TabsContent value="chat" className="mt-6">
+          {(() => {
+            const session = getActiveSession();
+            return (
+              session && (
+                <ChatSection
+                  me={{
+                    type: "admin",
+                    id: session.id,
+                    userId: session.userId,
+                    fullName: session.fullName,
+                  }}
+                />
+              )
+            );
+          })()}
         </TabsContent>
       </Tabs>
 

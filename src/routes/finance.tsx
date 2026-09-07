@@ -2,6 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ContactListSection } from "@/components/ContactListSection";
+import { ChatSection } from "@/components/ChatSection";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
@@ -202,6 +203,19 @@ function FinancePage() {
       )}
 
       <ContactListSection />
+
+      {session && (
+        <div className="glass-panel p-7">
+          <ChatSection
+            me={{
+              type: "admin",
+              id: session.id,
+              userId: session.userId,
+              fullName: session.fullName,
+            }}
+          />
+        </div>
+      )}
     </AppShell>
   );
 }

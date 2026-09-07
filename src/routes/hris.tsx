@@ -61,6 +61,7 @@ import {
 } from "@/components/ui/alert-dialog";
 import { AttendanceFlow } from "@/components/AttendanceFlow";
 import { ContactListSection } from "@/components/ContactListSection";
+import { ChatSection } from "@/components/ChatSection";
 import {
   addEmployee,
   updateEmployee,
@@ -202,6 +203,7 @@ function HrisPage() {
             <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
             <TabsTrigger value="announcements">Pengumuman</TabsTrigger>
             <TabsTrigger value="contacts">Contact List</TabsTrigger>
+            <TabsTrigger value="chat">Chat</TabsTrigger>
             <TabsTrigger value="payroll">Payroll</TabsTrigger>
           </TabsList>
 
@@ -235,6 +237,24 @@ function HrisPage() {
 
           <TabsContent value="contacts" className="mt-6">
             <ContactListSection />
+          </TabsContent>
+
+          <TabsContent value="chat" className="mt-6">
+            {(() => {
+              const session = getActiveSession();
+              return (
+                session && (
+                  <ChatSection
+                    me={{
+                      type: "admin",
+                      id: session.id,
+                      userId: session.userId,
+                      fullName: session.fullName,
+                    }}
+                  />
+                )
+              );
+            })()}
           </TabsContent>
 
           <TabsContent value="payroll" className="mt-6">
