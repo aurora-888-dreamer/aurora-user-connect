@@ -254,6 +254,61 @@ function SettingsPage() {
         </div>
       </section>
 
+      <section className="glass-panel p-7">
+        <h3 className="flex items-center gap-2 text-base font-semibold">
+          <Clock className="size-4 text-primary" />
+          Periode Payroll &amp; Pensiun
+        </h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Tanggal potong gaji dipakai HRIS (Laporan Akhir) dan Finance supaya periode yang dihitung
+          sama persis.
+        </p>
+        <div className="mt-4 grid gap-4 sm:grid-cols-3">
+          <div>
+            <Label>Tanggal Potong Gaji</Label>
+            <Input
+              type="number"
+              min={1}
+              max={28}
+              className="mt-2"
+              value={form.payrollCutoffDay}
+              onChange={(e) => setForm({ ...form, payrollCutoffDay: Number(e.target.value) || 1 })}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Contoh: 20 berarti periode berjalan tgl 20 ke tgl 20 bulan berikutnya. Isi 1 untuk
+              bulan kalender biasa.
+            </p>
+          </div>
+          <div>
+            <Label>Pengali Masa Kerja (n)</Label>
+            <Input
+              type="number"
+              step="any"
+              className="mt-2"
+              value={form.pensionYearsMultiplier}
+              onChange={(e) =>
+                setForm({ ...form, pensionYearsMultiplier: Number(e.target.value) || 0 })
+              }
+            />
+          </div>
+          <div>
+            <Label>Konstanta</Label>
+            <Input
+              type="number"
+              step="any"
+              className="mt-2"
+              value={form.pensionConstant}
+              onChange={(e) => setForm({ ...form, pensionConstant: Number(e.target.value) || 0 })}
+            />
+          </div>
+        </div>
+        <p className="mt-3 text-xs text-muted-foreground">
+          Formula pensiun saat usia 55 tahun: (pengali × masa kerja tahun + konstanta) × gaji pokok.
+          Default {form.pensionYearsMultiplier}n+{form.pensionConstant} mengikuti standar
+          pemerintah.
+        </p>
+      </section>
+
       <Button onClick={handleSave} size="lg" disabled={saving}>
         <Save className="size-4" /> {saving ? "Menyimpan…" : "Simpan Pengaturan"}
       </Button>

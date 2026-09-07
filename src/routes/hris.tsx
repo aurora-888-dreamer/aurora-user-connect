@@ -101,7 +101,11 @@ import {
   deleteShiftType,
   bulkAssignShiftToDepartment,
   type ShiftType,
+  computeAttendanceSummaryForAll,
+  computeAttendanceSummary,
+  type AttendanceSummary,
 } from "@/lib/hris-data";
+import { getCompanyProfile, getPreviousPayrollPeriod } from "@/lib/company-data";
 import {
   getStaffAccounts,
   createStaffAccount,
@@ -193,6 +197,7 @@ function HrisPage() {
             <TabsTrigger value="locations">Lokasi</TabsTrigger>
             <TabsTrigger value="shifts">Jam Kerja</TabsTrigger>
             <TabsTrigger value="attendance">Absensi GPS</TabsTrigger>
+            <TabsTrigger value="final-report">Laporan Akhir</TabsTrigger>
             <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
             <TabsTrigger value="announcements">Pengumuman</TabsTrigger>
             <TabsTrigger value="payroll">Payroll</TabsTrigger>
@@ -212,6 +217,10 @@ function HrisPage() {
 
           <TabsContent value="attendance" className="mt-6">
             <AttendanceTab employees={employees} attendance={attendance} onChange={refresh} />
+          </TabsContent>
+
+          <TabsContent value="final-report" className="mt-6">
+            <FinalReportTab employees={employees} />
           </TabsContent>
 
           <TabsContent value="staff-accounts" className="mt-6">
@@ -1384,6 +1393,107 @@ function AttendanceTab({
   );
 }
 
+function FinalReportTab({ employees }: { employees: Employee[] }) {
+  const [period, setPeriod] = useState<{ start: string; end: string; label: string } | null>(null);
+  const [cutoffDay, setCutoffDay] = useState(1);
+  const [summaries, setSummaries] = useState<AttendanceSummary[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const loadPeriodAndSummaries = (start: string, end: string, label: string) => {
+    setLoading(true);
+    computeAttendanceSummaryForAll(start, end)
+      .then(setSummaries)
+      .catch(() => toast.error("Gagal menghitung laporan."))
+      .finally(() => setLoading(false));
+    setPeriod({ start, end, label });
+  };
+
+  useEffect(() => {
+    getCompanyProfile()
+      .then((c) => {
+        setCutoffDay(c.payrollCutoffDay);
+        const prev = getPreviousPayrollPeriod(c.payrollCutoffDay);
+        loadPeriodAndSummaries(prev.start, prev.end, prev.label);
+      })
+      .catch(() => toast.error("Gagal memuat pengaturan periode payroll."));
+  }, []);
+
+  const summaryByEmployeeId = new Map(summaries.map((s) => [s.employeeId, s]));
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-base font-semibold">Laporan Akhir Kehadiran &amp; Lembur</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Periode potong tanggal {cutoffDay} (atur di menu Pengaturan). Data ini yang dipakai
+          Finance untuk hitung tunjangan makan × hari hadir dan lembur × jam — tidak perlu dikirim
+          manual, Finance mengambil dari angka yang sama.
+        </p>
+      </div>
+
+      {period && (
+        <div className="flex items-center gap-4">
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <Label>Dari</Label>
+              <Input
+                type="date"
+                className="mt-2"
+                value={period.start}
+                onChange={(e) => loadPeriodAndSummaries(e.target.value, period.end, "Kustom")}
+              />
+            </div>
+            <div>
+              <Label>Sampai</Label>
+              <Input
+                type="date"
+                className="mt-2"
+                value={period.end}
+                onChange={(e) => loadPeriodAndSummaries(period.start, e.target.value, "Kustom")}
+              />
+            </div>
+          </div>
+          <Badge variant="secondary" className="mt-6">
+            {period.label}
+          </Badge>
+        </div>
+      )}
+
+      <section className="glass-panel overflow-hidden">
+        {loading ? (
+          <p className="p-7 text-sm text-muted-foreground">Menghitung…</p>
+        ) : employees.length === 0 ? (
+          <p className="p-7 text-sm text-muted-foreground">Belum ada karyawan.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nama</TableHead>
+                <TableHead>Departemen</TableHead>
+                <TableHead>Hari Hadir</TableHead>
+                <TableHead>Jam Lembur</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {employees.map((e) => {
+                const s = summaryByEmployeeId.get(e.id);
+                return (
+                  <TableRow key={e.id}>
+                    <TableCell>{e.fullName}</TableCell>
+                    <TableCell>{e.department}</TableCell>
+                    <TableCell>{s?.presentDays ?? 0} hari</TableCell>
+                    <TableCell>{s?.totalOvertimeHours ?? 0} jam</TableCell>
+                  </TableRow>
+                );
+              })}
+            </TableBody>
+          </Table>
+        )}
+      </section>
+    </div>
+  );
+}
+
 function StaffAccountsTab({
   employees,
   accounts,
@@ -2266,23 +2376,50 @@ function PayrollTab({
   onChange: () => void;
 }) {
   const [selected, setSelected] = useState<string>(employees[0]?.id ?? "");
-  const [period, setPeriod] = useState(new Date().toISOString().slice(0, 7));
-  const [allowances, setAllowances] = useState("0");
-  const [overtimePay, setOvertimePay] = useState("0");
+  const [cutoffDay, setCutoffDay] = useState(1);
+  const [period, setPeriod] = useState<{ start: string; end: string; label: string } | null>(null);
+  const [summary, setSummary] = useState<AttendanceSummary | null>(null);
+  const [loadingSummary, setLoadingSummary] = useState(false);
 
   useEffect(() => {
     if (!selected && employees.length > 0) setSelected(employees[0]!.id);
   }, [employees, selected]);
 
-  const employee = employees.find((e) => e.id === selected);
-  const preview = employee
-    ? computePayroll({
-        employee,
-        period,
-        allowances: Number(allowances) || 0,
-        overtimePay: Number(overtimePay) || 0,
+  useEffect(() => {
+    getCompanyProfile()
+      .then((c) => {
+        setCutoffDay(c.payrollCutoffDay);
+        setPeriod(getPreviousPayrollPeriod(c.payrollCutoffDay));
       })
-    : null;
+      .catch(() => toast.error("Gagal memuat pengaturan periode payroll."));
+  }, []);
+
+  const employee = employees.find((e) => e.id === selected);
+
+  useEffect(() => {
+    if (!employee || !period) {
+      setSummary(null);
+      return;
+    }
+    setLoadingSummary(true);
+    computeAttendanceSummary(employee, period.start, period.end)
+      .then(setSummary)
+      .catch(() => {
+        toast.error("Gagal menghitung kehadiran & lembur.");
+        setSummary(null);
+      })
+      .finally(() => setLoadingSummary(false));
+  }, [employee, period]);
+
+  const preview =
+    employee && period && summary
+      ? computePayroll({
+          employee,
+          period: period.label,
+          presentDays: summary.presentDays,
+          overtimeHours: summary.totalOvertimeHours,
+        })
+      : null;
 
   const handleGenerate = () => {
     if (!preview) return;
@@ -2295,6 +2432,10 @@ function PayrollTab({
     <div className="space-y-6">
       <section className="glass-panel p-7">
         <h3 className="text-base font-semibold">Kalkulator Payroll — PPh 21 TER &amp; BPJS</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Tunjangan makan dan lembur dihitung otomatis dari kehadiran beneran (lihat tab Laporan
+          Akhir) — bukan input manual. Periode potong tanggal {cutoffDay} (atur di Pengaturan).
+        </p>
         {employees.length === 0 ? (
           <p className="mt-2 text-sm text-muted-foreground">
             Tambahkan karyawan dulu di tab Database Karyawan.
@@ -2318,43 +2459,60 @@ function PayrollTab({
                 </Select>
               </div>
               <div>
-                <Label>Periode (YYYY-MM)</Label>
+                <Label>Periode</Label>
+                <div className="mt-2 grid grid-cols-2 gap-2">
+                  <Input
+                    type="date"
+                    value={period?.start ?? ""}
+                    onChange={(e) =>
+                      setPeriod({
+                        start: e.target.value,
+                        end: period?.end ?? e.target.value,
+                        label: "Kustom",
+                      })
+                    }
+                  />
+                  <Input
+                    type="date"
+                    value={period?.end ?? ""}
+                    onChange={(e) =>
+                      setPeriod({
+                        start: period?.start ?? e.target.value,
+                        end: e.target.value,
+                        label: "Kustom",
+                      })
+                    }
+                  />
+                </div>
+              </div>
+              <div>
+                <Label>Hari Hadir</Label>
                 <Input
                   className="mt-2"
-                  value={period}
-                  onChange={(e) => setPeriod(e.target.value)}
+                  disabled
+                  value={loadingSummary ? "…" : `${summary?.presentDays ?? 0} hari`}
                 />
               </div>
               <div>
-                <Label>Tunjangan (Rp)</Label>
+                <Label>Jam Lembur</Label>
                 <Input
-                  type="number"
                   className="mt-2"
-                  value={allowances}
-                  onChange={(e) => setAllowances(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label>Lembur (Rp)</Label>
-                <Input
-                  type="number"
-                  className="mt-2"
-                  value={overtimePay}
-                  onChange={(e) => setOvertimePay(e.target.value)}
+                  disabled
+                  value={loadingSummary ? "…" : `${summary?.totalOvertimeHours ?? 0} jam`}
                 />
               </div>
             </div>
 
             {preview && (
-              <div className="mt-6 grid gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5 sm:grid-cols-3">
+              <div className="mt-6 grid gap-3 rounded-xl border border-primary/30 bg-primary/5 p-5 sm:grid-cols-4">
                 <Stat
                   label="Gaji Bruto"
                   value={rupiah(preview.basicSalary + preview.allowances + preview.overtimePay)}
                 />
                 <Stat label="PPh 21 TER" value={`- ${rupiah(preview.pph21Amount)}`} />
                 <Stat
-                  label="BPJS (Kes + TK)"
-                  value={`- ${rupiah(preview.bpjsHealthEmp + preview.bpjsTkEmp)}`}
+                  label="BPJS + JHT"
+                  value={`- ${rupiah(preview.bpjsHealthEmp + preview.bpjsTkEmp + preview.jhtDeduction)}`}
                 />
                 <Stat label="Gaji Bersih (Net)" value={rupiah(preview.netSalary)} highlight />
               </div>
@@ -2378,7 +2536,7 @@ function PayrollTab({
                 <TableHead>Karyawan</TableHead>
                 <TableHead>Bruto</TableHead>
                 <TableHead>PPh21</TableHead>
-                <TableHead>BPJS</TableHead>
+                <TableHead>BPJS + JHT</TableHead>
                 <TableHead>Net</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead />
@@ -2393,7 +2551,7 @@ function PayrollTab({
                   </TableCell>
                   <TableCell>{rupiah(p.basicSalary + p.allowances + p.overtimePay)}</TableCell>
                   <TableCell>{rupiah(p.pph21Amount)}</TableCell>
-                  <TableCell>{rupiah(p.bpjsHealthEmp + p.bpjsTkEmp)}</TableCell>
+                  <TableCell>{rupiah(p.bpjsHealthEmp + p.bpjsTkEmp + p.jhtDeduction)}</TableCell>
                   <TableCell className="font-semibold">{rupiah(p.netSalary)}</TableCell>
                   <TableCell>
                     <Badge variant={p.paymentStatus === "PAID" ? "default" : "secondary"}>
