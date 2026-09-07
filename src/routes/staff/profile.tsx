@@ -1,11 +1,10 @@
-import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useRef, useState } from "react";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import {
-  ArrowLeft,
   Lock,
   ScanFace,
   IdCard,
@@ -14,14 +13,17 @@ import {
   CheckCircle2,
   AlertTriangle,
   RotateCcw,
+  LogOut,
 } from "lucide-react";
 import {
   getStaffSession,
+  setStaffSession,
   updateStaffAccount,
   type StaffAccount,
   type KtpExtracted,
 } from "@/lib/staff-auth";
 import { FaceCaptureDialog } from "@/components/FaceCaptureDialog";
+import { StaffTabBar } from "@/components/StaffTabBar";
 import { getEmployeeById } from "@/lib/hris-data";
 import { readKtpPhoto, niksMatch } from "@/lib/ktp-ocr";
 
@@ -158,16 +160,22 @@ function StaffProfilePage() {
   };
 
   return (
-    <div className="min-h-screen bg-background p-5">
-      <Link
-        to="/staff/dashboard"
-        className="mb-4 flex items-center gap-1.5 text-sm text-muted-foreground"
-      >
-        <ArrowLeft className="size-4" /> Kembali
-      </Link>
+    <div className="min-h-screen bg-background p-5 pb-24">
+      <div className="mx-auto flex max-w-md items-center justify-between">
+        <h1 className="text-lg font-bold">Akun</h1>
+        <button
+          onClick={() => {
+            setStaffSession(null);
+            navigate({ to: "/staff" });
+          }}
+          className="flex items-center gap-1.5 text-xs text-muted-foreground hover:text-destructive"
+        >
+          <LogOut className="size-3.5" /> Keluar
+        </button>
+      </div>
 
-      <div className="glass-panel mx-auto max-w-md space-y-5 p-6">
-        <h1 className="text-lg font-bold">Edit Profil</h1>
+      <div className="glass-panel mx-auto mt-4 max-w-md space-y-5 p-6">
+        <h2 className="text-base font-semibold">Profil &amp; Data Kepegawaian</h2>
 
         <div>
           <Label className="flex items-center gap-1.5">
@@ -426,6 +434,8 @@ function StaffProfilePage() {
           onChange={handleKtpFileChosen}
         />
       </div>
+
+      <StaffTabBar />
     </div>
   );
 }
