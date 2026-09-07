@@ -24,20 +24,22 @@ function LoginComponent() {
     }
   }, [navigate]);
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
     setError("");
-
-    const users = getStoredUsers();
-    const user = users.find(
-      (u) => u.userId.toUpperCase() === userId.trim().toUpperCase() && u.pin === pin,
-    );
-
-    if (user) {
-      setActiveSession(user);
-      navigate({ to: "/dashboard" });
-    } else {
-      setError("User ID atau PIN 6 digit salah!");
+    setSubmitting(true);
+    try {
+      const user = await findAdminByCredentials(userId, pin);
+      if (user) {
+        setActiveSession(user);
+        navigate({ to: "/dashboard" });
+      } else {
+        setError("User ID atau PIN 6 digit salah!");
+      }
+    } catch {
+      setError("Gagal menghubungi server. Periksa koneksi internet Anda.");
+    } finally {
+      setSubmitting(false);
     }
   };
 
