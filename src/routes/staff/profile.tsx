@@ -15,7 +15,6 @@ import {
   AlertTriangle,
   RotateCcw,
   LogOut,
-  ExternalLink,
 } from "lucide-react";
 import {
   getStaffSession,
@@ -26,7 +25,6 @@ import {
 } from "@/lib/staff-auth";
 import { FaceCaptureDialog } from "@/components/FaceCaptureDialog";
 import { StaffTabBar } from "@/components/StaffTabBar";
-import { ContactListSection } from "@/components/ContactListSection";
 import { getEmployeeById, updateEmployee } from "@/lib/hris-data";
 import { readKtpPhoto, niksMatch } from "@/lib/ktp-ocr";
 
@@ -509,30 +507,6 @@ function StaffProfilePage() {
           className="hidden"
           onChange={handleKtpFileChosen}
         />
-      </div>
-
-      <div className="mx-auto mt-4 max-w-md">
-        <ContactListSection readOnly />
-      </div>
-
-      <div className="glass-panel mx-auto mt-4 max-w-md space-y-2 p-6">
-        <h2 className="text-sm font-semibold text-muted-foreground">Ekosistem Aurora</h2>
-        <a
-          href="https://noble-smart-voice.lovable.app"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
-        >
-          Noble Smart Voice <ExternalLink className="size-3.5 text-muted-foreground" />
-        </a>
-        <a
-          href="https://magic-talk.lovable.app"
-          target="_blank"
-          rel="noopener noreferrer"
-          className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
-        >
-          Magic Talk <ExternalLink className="size-3.5 text-muted-foreground" />
-        </a>
       </div>
 
       <StaffTabBar />

@@ -6,6 +6,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { toast } from "sonner";
 import { Megaphone, ClipboardCheck, Bell, Check, X } from "lucide-react";
 import { StaffTabBar } from "@/components/StaffTabBar";
+import { ChatSection } from "@/components/ChatSection";
 import { getAnnouncements, type Announcement } from "@/lib/announcements-data";
 import { getSubordinates, type Employee } from "@/lib/hris-data";
 import { getStaffSession } from "@/lib/staff-auth";
@@ -102,6 +103,17 @@ function StaffInboxPage() {
       </header>
 
       <main className="mx-auto max-w-md space-y-5 p-5">
+        <section className="glass-panel p-5">
+          <ChatSection
+            me={{
+              type: "staff",
+              id: account.id,
+              userId: account.userId,
+              fullName: account.fullName,
+            }}
+          />
+        </section>
+
         {/* Role-based visibility: only shows for accounts with subordinates */}
         {isSupervisor && (
           <section className="glass-panel p-5">

@@ -1,9 +1,10 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { LogOut, Megaphone, Clock3, Bell } from "lucide-react";
+import { LogOut, Megaphone, Clock3, Bell, ExternalLink } from "lucide-react";
 import { Badge } from "@/components/ui/badge";
 import { AttendanceFlow } from "@/components/AttendanceFlow";
 import { StaffTabBar } from "@/components/StaffTabBar";
+import { ContactListSection } from "@/components/ContactListSection";
 import { getEmployeeById, type Employee } from "@/lib/hris-data";
 import { getCompanyProfile, type CompanyProfile } from "@/lib/company-data";
 import { getAnnouncements, type Announcement } from "@/lib/announcements-data";
@@ -174,6 +175,30 @@ function StaffDashboardPage() {
           <Link to="/staff/request" className="mt-3 block text-center text-xs text-primary">
             Ajukan Baru
           </Link>
+        </section>
+
+        <div className="glass-panel p-5">
+          <ContactListSection readOnly />
+        </div>
+
+        <section className="glass-panel space-y-2 p-5">
+          <h2 className="text-sm font-semibold text-muted-foreground">Ekosistem Aurora</h2>
+          <a
+            href="https://noble-smart-voice.lovable.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
+          >
+            Noble Smart Voice <ExternalLink className="size-3.5 text-muted-foreground" />
+          </a>
+          <a
+            href="https://magic-talk.lovable.app"
+            target="_blank"
+            rel="noopener noreferrer"
+            className="flex items-center justify-between rounded-lg border border-border p-3 text-sm"
+          >
+            Magic Talk <ExternalLink className="size-3.5 text-muted-foreground" />
+          </a>
         </section>
       </main>
 
