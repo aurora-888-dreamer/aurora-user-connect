@@ -6,8 +6,9 @@
 // PINs are stored as SHA-256 hashes (prefix "hpm-admin-pin:").
 import { supabase } from "@/integrations/supabase/client";
 import { getOrCreateCompanyId } from "@/lib/company-data";
+import { getEmployeeById } from "@/lib/hris-data";
 
-export type UserRole = "SUPER_ADMIN" | "ADMIN" | "OPERATOR";
+export type UserRole = "TOP_ADMIN" | "SUPER_ADMIN" | "ADMIN" | "OPERATOR";
 
 export interface UserProfile {
   /** Internal UUID (hpm_admin_users.id) — used for FK references like the shared Contact List, not for login. */
@@ -18,8 +19,16 @@ export interface UserProfile {
   role: UserRole;
   /** null/"" = general admin (sees Core HRIS/ATS as usual). "Finance" = restricted to the Finance module only. */
   department?: string;
+  position?: string;
+  /** hpm_employees.id — every admin account is a role granted to an already-registered employee, not a standalone identity. Absent only for the original bootstrap account and Aurora's own developer account. */
+  employeeId?: string;
   /** Aurora's own developer/platform account — full access everywhere, ignores department restrictions. Set manually via SQL. */
   isDeveloper?: boolean;
+}
+
+/** Top Admin — full access to every module, every department, including Finance. Assigned automatically to employees at "Direktur" level; anyone else can also be granted this role. The one thing it does NOT open is the hidden Dev Console (Aurora's own). */
+export function isTopAdmin(profile: UserProfile): boolean {
+  return profile.role === "TOP_ADMIN";
 }
 
 /** Direktur-tier within Finance — department "Finance" + role SUPER_ADMIN. Sees & edits EVERY employee's salary/allowances, including senior levels (Kepala Divisi/GM, Direktur). */
@@ -59,6 +68,8 @@ type AdminRow = {
   phone_wa: string | null;
   role: string;
   department: string | null;
+  position: string | null;
+  employee_id: string | null;
   is_developer: boolean;
 };
 
@@ -70,6 +81,8 @@ function toProfile(row: AdminRow): UserProfile {
     phoneWA: row.phone_wa ?? "",
     role: (row.role as UserRole) ?? "OPERATOR",
     ...(row.department ? { department: row.department } : {}),
+    ...(row.position ? { position: row.position } : {}),
+    ...(row.employee_id ? { employeeId: row.employee_id } : {}),
     ...(row.is_developer ? { isDeveloper: true } : {}),
   };
 }
@@ -77,7 +90,9 @@ function toProfile(row: AdminRow): UserProfile {
 export async function listAdminUsers(): Promise<UserProfile[]> {
   const { data, error } = await supabase
     .from("hpm_admin_users")
-    .select("id, user_id, full_name, phone_wa, role, department, is_developer")
+    .select(
+      "id, user_id, full_name, phone_wa, role, department, position, employee_id, is_developer",
+    )
     .eq("is_active", true)
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -90,7 +105,9 @@ export async function findAdminByCredentials(
 ): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from("hpm_admin_users")
-    .select("id, user_id, full_name, phone_wa, role, department, is_developer, pin_hash")
+    .select(
+      "id, user_id, full_name, phone_wa, role, department, position, employee_id, is_developer, pin_hash",
+    )
     .ilike("user_id", userId.trim())
     .eq("is_active", true)
     .maybeSingle();
@@ -128,14 +145,27 @@ export async function changeAdminPin(
   return true;
 }
 
+/**
+ * Grants admin access to an ALREADY-REGISTERED employee — this is the only
+ * way to create an admin account now. Name/department/jabatan are pulled
+ * straight from their HRIS record, not typed freely, so the two can never
+ * drift apart. An employee at "Direktur" level is automatically escalated
+ * to TOP_ADMIN (full access everywhere except the Dev Console) regardless
+ * of the role passed in.
+ */
 export async function createAdminUser(input: {
   userId: string;
   pin: string;
-  fullName: string;
-  phoneWA?: string;
+  employeeId: string;
   role: UserRole;
+  /** Only meaningful for department-scoped tiers like Finance — most grants leave this unset. */
   department?: string;
 }): Promise<UserProfile> {
+  const employee = await getEmployeeById(input.employeeId);
+  if (!employee) throw new Error("Karyawan tidak ditemukan di HRIS.");
+
+  const effectiveRole: UserRole = employee.positionLevel === "Direktur" ? "TOP_ADMIN" : input.role;
+
   const companyId = await getOrCreateCompanyId();
   const { data, error } = await supabase
     .from("hpm_admin_users")
@@ -143,13 +173,15 @@ export async function createAdminUser(input: {
       company_id: companyId,
       user_id: input.userId.toUpperCase(),
       pin_hash: await hashPin(input.pin),
-      full_name: input.fullName,
-      phone_wa: input.phoneWA ?? "",
-      role: input.role,
+      full_name: employee.fullName,
+      phone_wa: employee.phone || "",
+      role: effectiveRole,
       department: input.department || null,
+      position: employee.position || null,
+      employee_id: employee.id,
       is_active: true,
     })
-    .select("id, user_id, full_name, phone_wa, role, department")
+    .select("id, user_id, full_name, phone_wa, role, department, position, employee_id")
     .single();
   if (error) throw error;
   return toProfile(data as AdminRow);
