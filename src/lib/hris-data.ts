@@ -254,6 +254,15 @@ export async function deleteEmployee(id: string): Promise<void> {
   if (error) throw error;
 }
 
+export async function getSubordinates(supervisorEmployeeId: string): Promise<Employee[]> {
+  const { data, error } = await supabase
+    .from("hpm_employees")
+    .select(EMPLOYEE_COLUMNS)
+    .eq("supervisor_id", supervisorEmployeeId);
+  if (error) throw error;
+  return (data as EmployeeRow[]).map(toEmployee);
+}
+
 // ---------- Attendance ----------
 
 type AttendanceRow = {
