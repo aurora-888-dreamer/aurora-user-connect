@@ -70,18 +70,16 @@ function LoginComponent() {
             </div>
             <div>
               <label className="mb-1 block text-sm font-medium">PIN (6 Digit)</label>
-              <div className="flex justify-center">
-                <InputOTP maxLength={6} value={pin} onChange={(val) => setPin(val)}>
-                  <InputOTPGroup>
-                    <InputOTPSlot index={0} />
-                    <InputOTPSlot index={1} />
-                    <InputOTPSlot index={2} />
-                    <InputOTPSlot index={3} />
-                    <InputOTPSlot index={4} />
-                    <InputOTPSlot index={5} />
-                  </InputOTPGroup>
-                </InputOTP>
-              </div>
+              <Input
+                type="password"
+                inputMode="numeric"
+                maxLength={6}
+                value={pin}
+                onChange={(e) => setPin(e.target.value.replace(/\D/g, ""))}
+                required
+                className="border-slate-700 bg-slate-900 tracking-[0.4em]"
+                placeholder="••••••"
+              />
             </div>
             <Button type="submit" className="w-full bg-blue-600 hover:bg-blue-500">
               Masuk
