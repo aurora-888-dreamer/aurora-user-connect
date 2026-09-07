@@ -9,6 +9,7 @@ import {
   Landmark,
   Mic,
   MessageSquareText,
+  ShieldCheck,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import {
@@ -45,6 +46,7 @@ const FULL_ACCESS_TOOLS = [
   { to: "/ats", label: "ATS Recruitment", icon: Briefcase },
   { to: "/directory", label: "User ID Directory", icon: Database },
   { to: "/finance", label: "Finance", icon: Landmark },
+  { to: "/menu-access", label: "Akses Menu", icon: ShieldCheck },
   { to: "/settings", label: "Pengaturan", icon: Settings },
 ] as const;
 
