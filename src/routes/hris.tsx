@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
+import { Textarea } from "@/components/ui/textarea";
 import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
@@ -28,6 +29,7 @@ import {
   UserPlus,
   ScanFace,
   KeyRound,
+  Megaphone,
   Copy,
   Pencil,
   Trash2,
@@ -81,6 +83,12 @@ import {
   resetStaffAccountToDefaultPin,
   type StaffAccount,
 } from "@/lib/staff-auth";
+import {
+  getAnnouncements,
+  addAnnouncement,
+  deleteAnnouncement,
+  type Announcement,
+} from "@/lib/announcements-data";
 
 export const Route = createFileRoute("/hris")({
   head: () => ({
@@ -159,6 +167,7 @@ function HrisPage() {
             <TabsTrigger value="employees">Database Karyawan</TabsTrigger>
             <TabsTrigger value="attendance">Absensi GPS</TabsTrigger>
             <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
+            <TabsTrigger value="announcements">Pengumuman</TabsTrigger>
             <TabsTrigger value="payroll">Payroll</TabsTrigger>
           </TabsList>
 
@@ -172,6 +181,10 @@ function HrisPage() {
 
           <TabsContent value="staff-accounts" className="mt-6">
             <StaffAccountsTab employees={employees} accounts={staffAccounts} onChange={refresh} />
+          </TabsContent>
+
+          <TabsContent value="announcements" className="mt-6">
+            <AnnouncementsTab />
           </TabsContent>
 
           <TabsContent value="payroll" className="mt-6">
@@ -1123,6 +1136,112 @@ function StaffAccountsTab({
               ))}
             </TableBody>
           </Table>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function AnnouncementsTab() {
+  const [items, setItems] = useState<Announcement[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [title, setTitle] = useState("");
+  const [body, setBody] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const refresh = () => {
+    setLoading(true);
+    getAnnouncements()
+      .then(setItems)
+      .catch(() => toast.error("Gagal memuat pengumuman."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(refresh, []);
+
+  const handleAdd = async () => {
+    if (!title.trim() || !body.trim()) {
+      toast.error("Judul dan isi pengumuman wajib diisi.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await addAnnouncement({ title: title.trim(), body: body.trim() });
+      toast.success("Pengumuman dipublikasikan — langsung tampil di app staff.");
+      setTitle("");
+      setBody("");
+      refresh();
+    } catch {
+      toast.error("Gagal membuat pengumuman. Coba lagi.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteAnnouncement(id);
+      toast.success("Pengumuman dihapus.");
+      refresh();
+    } catch {
+      toast.error("Gagal menghapus. Coba lagi.");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <section className="glass-panel p-7">
+        <h3 className="text-base font-semibold">Buat Pengumuman</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Tampil di Beranda (1-2 terbaru) dan Kotak Masuk semua staff.
+        </p>
+        <div className="mt-4 space-y-4">
+          <div>
+            <Label>Judul</Label>
+            <Input
+              className="mt-2"
+              value={title}
+              onChange={(e) => setTitle(e.target.value)}
+              placeholder="Rapat guru — Senin 08:00"
+            />
+          </div>
+          <div>
+            <Label>Isi Pengumuman</Label>
+            <Textarea
+              className="mt-2"
+              value={body}
+              onChange={(e) => setBody(e.target.value)}
+              rows={3}
+            />
+          </div>
+        </div>
+        <Button onClick={handleAdd} className="mt-5" disabled={submitting}>
+          <Megaphone className="size-4" /> {submitting ? "Mempublikasikan…" : "Publikasikan"}
+        </Button>
+      </section>
+
+      <section className="glass-panel overflow-hidden">
+        {loading ? (
+          <p className="p-7 text-sm text-muted-foreground">Memuat…</p>
+        ) : items.length === 0 ? (
+          <p className="p-7 text-sm text-muted-foreground">Belum ada pengumuman.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {items.map((a) => (
+              <li key={a.id} className="flex items-start justify-between gap-4 p-5">
+                <div>
+                  <p className="font-medium">{a.title}</p>
+                  <p className="mt-1 text-sm text-muted-foreground">{a.body}</p>
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    {new Date(a.createdAt).toLocaleString("id-ID")}
+                  </p>
+                </div>
+                <Button size="sm" variant="outline" onClick={() => handleDelete(a.id)}>
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
         )}
       </section>
     </div>
