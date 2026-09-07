@@ -18,11 +18,30 @@
  * surface it directly in the UI so the flow is fully testable now. Swap
  * requestStaffOtp/requestPinResetCode for real SMSGate + email calls once
  * the backend is live.
+ *
+ * face_photo / ktp_photo / ktp_extracted / ktp_nik_match were added so the
+ * FaceID reference photo and KTP capture are visible/replaceable from the
+ * Staff Profile page instead of being a black box (see FaceCaptureDialog +
+ * staff/profile.tsx + lib/ktp-ocr.ts).
  */
 import { supabase } from "@/integrations/supabase/client";
-import type { Database } from "@/integrations/supabase/types";
+import type { Database, Json } from "@/integrations/supabase/types";
 import { getOrCreateCompanyId } from "@/lib/company-data";
 import { deviceFingerprint, encryptNik } from "@/lib/device-identity";
+
+export type KtpExtracted = {
+  nik?: string;
+  fullName?: string;
+  birthPlace?: string;
+  birthDate?: string;
+  address?: string;
+  gender?: string;
+  religion?: string;
+  maritalStatus?: string;
+  occupation?: string;
+  nationality?: string;
+  raw?: string;
+};
 
 export type StaffAccount = {
   id: string;
@@ -37,6 +56,10 @@ export type StaffAccount = {
   profileCompleted: boolean; // once true, fullName/whatsapp are locked (lockIdentity pattern)
   faceEnrolled: boolean;
   faceDescriptor?: number[] | undefined;
+  facePhoto?: string | undefined;
+  ktpPhoto?: string | undefined;
+  ktpExtracted?: KtpExtracted | undefined;
+  ktpNikMatch?: boolean | undefined;
   createdAt: string;
 };
 
@@ -63,6 +86,10 @@ type StaffRow = {
   wa_verified: boolean;
   is_active: boolean;
   face_descriptor: unknown;
+  face_photo: string | null;
+  ktp_photo: string | null;
+  ktp_extracted: unknown;
+  ktp_nik_match: boolean | null;
   created_at: string;
 };
 
@@ -73,6 +100,10 @@ function toAccount(row: StaffRow): StaffAccount {
   const faceDescriptor = Array.isArray(row.face_descriptor)
     ? (row.face_descriptor as number[])
     : undefined;
+  const ktpExtracted =
+    row.ktp_extracted && typeof row.ktp_extracted === "object"
+      ? (row.ktp_extracted as KtpExtracted)
+      : undefined;
   return {
     id: row.id,
     employeeId: row.employee_id ?? "",
@@ -86,14 +117,18 @@ function toAccount(row: StaffRow): StaffAccount {
     profileCompleted: !!row.nik_encrypted,
     faceEnrolled: !!faceDescriptor,
     faceDescriptor,
+    facePhoto: row.face_photo ?? undefined,
+    ktpPhoto: row.ktp_photo ?? undefined,
+    ktpExtracted,
+    ktpNikMatch: row.ktp_nik_match ?? undefined,
     createdAt: row.created_at,
   };
 }
 
 const STAFF_COLUMNS =
-  "id, employee_id, user_id, full_name, whatsapp, email, nik_encrypted, device_id, wa_verified, is_active, face_descriptor, created_at";
+  "id, employee_id, user_id, full_name, whatsapp, email, nik_encrypted, device_id, wa_verified, is_active, face_descriptor, face_photo, ktp_photo, ktp_extracted, ktp_nik_match, created_at";
 const STAFF_COLUMNS_WITH_PIN =
-  "id, employee_id, user_id, full_name, whatsapp, email, nik_encrypted, device_id, wa_verified, is_active, face_descriptor, created_at, pin_hash";
+  "id, employee_id, user_id, full_name, whatsapp, email, nik_encrypted, device_id, wa_verified, is_active, face_descriptor, face_photo, ktp_photo, ktp_extracted, ktp_nik_match, created_at, pin_hash";
 
 export async function getStaffAccounts(): Promise<StaffAccount[]> {
   const companyId = await getOrCreateCompanyId();
@@ -194,6 +229,11 @@ export async function updateStaffAccount(id: string, patch: Partial<StaffAccount
   if (patch.nikEncrypted !== undefined) dbPatch.nik_encrypted = patch.nikEncrypted;
   if (patch.deviceId !== undefined) dbPatch.device_id = patch.deviceId;
   if (patch.faceDescriptor !== undefined) dbPatch.face_descriptor = patch.faceDescriptor;
+  if (patch.facePhoto !== undefined) dbPatch.face_photo = patch.facePhoto;
+  if (patch.ktpPhoto !== undefined) dbPatch.ktp_photo = patch.ktpPhoto;
+  if (patch.ktpExtracted !== undefined)
+    dbPatch.ktp_extracted = (patch.ktpExtracted as unknown as Json) ?? null;
+  if (patch.ktpNikMatch !== undefined) dbPatch.ktp_nik_match = patch.ktpNikMatch;
   if ((patch as { pin?: string }).pin !== undefined) {
     dbPatch.pin_hash = await hashPin((patch as { pin: string }).pin);
   }
