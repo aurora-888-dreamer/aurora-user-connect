@@ -209,6 +209,14 @@ export async function updateEmployee(id: string, patch: Partial<Employee>): Prom
   if (error) throw error;
 }
 
+/** Deletes an employee row. Any linked staff account (hpm_staff_users.employee_id) is
+ * automatically orphaned (set to null) by the database's ON DELETE SET NULL — the staff
+ * account itself is NOT deleted, only unlinked. */
+export async function deleteEmployee(id: string): Promise<void> {
+  const { error } = await supabase.from("hpm_employees").delete().eq("id", id);
+  if (error) throw error;
+}
+
 // ---------- Attendance ----------
 
 type AttendanceRow = {
