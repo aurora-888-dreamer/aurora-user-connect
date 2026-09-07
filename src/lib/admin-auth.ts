@@ -20,12 +20,17 @@ export interface UserProfile {
   isDeveloper?: boolean;
 }
 
-/** True for department === "Finance" AND role === SUPER_ADMIN — full control (set salary/allowances). */
-export function isFinanceHead(profile: UserProfile): boolean {
+/** Direktur-tier within Finance — department "Finance" + role SUPER_ADMIN. Sees & edits EVERY employee's salary/allowances, including senior levels (Kepala Divisi/GM, Direktur). */
+export function isFinanceDirector(profile: UserProfile): boolean {
   return profile.department === "Finance" && profile.role === "SUPER_ADMIN";
 }
 
-/** True for any Finance-department account (Head or Admin Finance). */
+/** Head Finance — department "Finance" + role ADMIN. Sees & edits only non-senior levels (Staff/Supervisor/Manager) — senior salaries stay hidden from this tier. */
+export function isFinanceHeadRole(profile: UserProfile): boolean {
+  return profile.department === "Finance" && profile.role === "ADMIN";
+}
+
+/** True for any Finance-department account (any of the three tiers). */
 export function isFinanceDept(profile: UserProfile): boolean {
   return profile.department === "Finance";
 }

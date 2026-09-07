@@ -28,17 +28,40 @@ export const RELIGIONS = [
 ] as const;
 export type Religion = (typeof RELIGIONS)[number];
 
+export const BLOOD_TYPES = ["A", "B", "AB", "O", "Tidak Diketahui"] as const;
+export type BloodType = (typeof BLOOD_TYPES)[number];
+
+/** Level jabatan untuk visibilitas gaji di Finance — bukan judul bebas seperti Jabatan/Pangkat. */
+export const POSITION_LEVELS = [
+  "Staff",
+  "Supervisor",
+  "Manager",
+  "Kepala Divisi / GM",
+  "Direktur",
+] as const;
+export type PositionLevel = (typeof POSITION_LEVELS)[number];
+
+/** True for "Kepala Divisi / GM" and "Direktur" — only a Finance Direktur (or the Aurora developer account) may view/edit these employees' pay. */
+export function isSeniorPositionLevel(level: PositionLevel | string): boolean {
+  return level === "Kepala Divisi / GM" || level === "Direktur";
+}
+
+/** One family member / emergency contact — name + WhatsApp number. */
+export type FamilyContact = {
+  name?: string;
+  whatsapp?: string;
+};
+
 export type FamilyData = {
   religion?: Religion;
   maritalStatus?: MaritalStatus;
   // Filled when Menikah:
-  spouseName?: string;
-  childrenCount?: number;
-  childrenNames?: string;
+  spouse?: FamilyContact;
+  children?: FamilyContact[];
   // Filled when Belum Menikah / Cerai:
-  fatherName?: string;
-  motherName?: string;
-  siblingsCount?: number;
+  father?: FamilyContact;
+  mother?: FamilyContact;
+  siblings?: FamilyContact[];
 };
 
 export type Employee = {
@@ -50,13 +73,15 @@ export type Employee = {
   department: string;
   position: string;
   rank: string;
+  positionLevel: PositionLevel;
+  bloodType?: BloodType;
   locationId?: string;
   shiftTypeId?: string;
   employmentStatus: EmploymentStatus;
   joinDate: string;
   npwp: string;
   ptkpStatus: PtkpStatus;
-  basicSalary: number;
+  basicSalary?: number;
   bankName?: string;
   bankAccountNumber?: string;
   bankAccountHolder?: string;
@@ -134,6 +159,8 @@ type EmployeeRow = {
   department: string | null;
   position: string | null;
   rank: string | null;
+  position_level: string;
+  blood_type: string | null;
   location_id: string | null;
   shift_type_id: string | null;
   employment_status: string;
@@ -169,6 +196,10 @@ function toEmployee(row: EmployeeRow): Employee {
     department: row.department ?? "",
     position: row.position ?? "",
     rank: row.rank ?? "",
+    positionLevel: (row.position_level as PositionLevel) ?? "Staff",
+    ...(row.blood_type && row.blood_type !== "Tidak Diketahui"
+      ? { bloodType: row.blood_type as BloodType }
+      : {}),
     ...(row.location_id ? { locationId: row.location_id } : {}),
     ...(row.shift_type_id ? { shiftTypeId: row.shift_type_id } : {}),
     employmentStatus: (row.employment_status as EmploymentStatus) ?? "PKWT",
@@ -199,7 +230,7 @@ function toEmployee(row: EmployeeRow): Employee {
 }
 
 const EMPLOYEE_COLUMNS =
-  "id, nik, full_name, email, phone, department, position, rank, location_id, shift_type_id, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, pension_contribution, performance_bonus, created_at";
+  "id, nik, full_name, email, phone, department, position, rank, position_level, blood_type, location_id, shift_type_id, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, pension_contribution, performance_bonus, created_at";
 
 export async function getEmployees(): Promise<Employee[]> {
   const companyId = await getOrCreateCompanyId();
@@ -260,13 +291,15 @@ export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Pr
       department: input.department || null,
       position: input.position || null,
       rank: input.rank || null,
+      position_level: input.positionLevel || "Staff",
+      blood_type: input.bloodType || null,
       location_id: input.locationId || null,
       shift_type_id: input.shiftTypeId || null,
       employment_status: input.employmentStatus,
       join_date: input.joinDate || null,
       npwp: input.npwp || null,
       ptkp_status: input.ptkpStatus,
-      basic_salary: input.basicSalary,
+      basic_salary: input.basicSalary || 0,
       is_active: input.isActive,
       source: input.source ?? "MANUAL",
       family_data: (input.familyData ?? null) as unknown as Json | null,
@@ -298,6 +331,8 @@ export async function updateEmployee(id: string, patch: Partial<Employee>): Prom
   if (patch.department !== undefined) dbPatch.department = patch.department;
   if (patch.position !== undefined) dbPatch.position = patch.position;
   if (patch.rank !== undefined) dbPatch.rank = patch.rank;
+  if (patch.positionLevel !== undefined) dbPatch.position_level = patch.positionLevel;
+  if (patch.bloodType !== undefined) dbPatch.blood_type = patch.bloodType || null;
   if (patch.locationId !== undefined) dbPatch.location_id = patch.locationId || null;
   if (patch.shiftTypeId !== undefined) dbPatch.shift_type_id = patch.shiftTypeId || null;
   if (patch.employmentStatus !== undefined) dbPatch.employment_status = patch.employmentStatus;
@@ -957,22 +992,23 @@ export function computePayroll(input: {
   overtimePay: number;
 }): Omit<Payroll, "id" | "createdAt"> {
   const { employee, period, allowances, overtimePay } = input;
-  const bruto = employee.basicSalary + allowances + overtimePay;
+  const basicSalary = employee.basicSalary ?? 0;
+  const bruto = basicSalary + allowances + overtimePay;
   const category = TER_CATEGORY[employee.ptkpStatus];
   const rate = terRate(category, bruto);
   const pph21Amount = Math.round(bruto * rate);
 
-  const healthBasis = Math.min(employee.basicSalary, BPJS_HEALTH_CAP);
+  const healthBasis = Math.min(basicSalary, BPJS_HEALTH_CAP);
   const bpjsHealthEmp = Math.round(healthBasis * 0.01);
-  const jpBasis = Math.min(employee.basicSalary, BPJS_JP_CAP);
-  const bpjsTkEmp = Math.round(employee.basicSalary * 0.02 + jpBasis * 0.01);
+  const jpBasis = Math.min(basicSalary, BPJS_JP_CAP);
+  const bpjsTkEmp = Math.round(basicSalary * 0.02 + jpBasis * 0.01);
 
   const netSalary = bruto - pph21Amount - bpjsHealthEmp - bpjsTkEmp;
 
   return {
     employeeId: employee.id,
     period,
-    basicSalary: employee.basicSalary,
+    basicSalary,
     allowances,
     overtimePay,
     bpjsHealthEmp,
