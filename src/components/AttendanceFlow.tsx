@@ -51,7 +51,7 @@ export function AttendanceFlow({
 }) {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [dialog, setDialog] = useState<
-    null | "outside" | "late-in" | "late-out" | "enroll-needed" | "verify" | "verify-out"
+    null | "outside" | "outside-out" | "late-in" | "late-out" | "enroll-needed" | "verify" | "verify-out"
   >(null);
   const [outsideConfirmed, setOutsideConfirmed] = useState(false);
   const [outsideNote, setOutsideNote] = useState("");
@@ -77,6 +77,12 @@ export function AttendanceFlow({
     lateInReason?: string;
   }>({});
   const [pendingOutReason, setPendingOutReason] = useState<string | undefined>(undefined);
+  const [pendingOut, setPendingOut] = useState<{
+    coords?: { lat: string; long: string };
+    distanceMeters?: number;
+    isOutsideOffice?: boolean;
+    outsideLocationNote?: string;
+  }>({});
 
   const openSession = sessions.find((s) => !s.clockOut) ?? null;
 
@@ -124,6 +130,7 @@ export function AttendanceFlow({
     setLateOutReasonText("");
     setPending({});
     setPendingOutReason(undefined);
+    setPendingOut({});
   };
 
   const proceedAfterGps = (partial: typeof pending) => {
@@ -194,7 +201,19 @@ export function AttendanceFlow({
     if (!employee) return;
     setBusy(true);
     try {
-      await clockOut(employee.id, reason);
+      await clockOut(employee.id, {
+        ...(reason ? { lateOutReason: reason } : {}),
+        ...(pendingOut.coords ? { coords: pendingOut.coords } : {}),
+        ...(pendingOut.distanceMeters !== undefined
+          ? { distanceMeters: pendingOut.distanceMeters }
+          : {}),
+        ...(pendingOut.isOutsideOffice !== undefined
+          ? { isOutsideOffice: pendingOut.isOutsideOffice }
+          : {}),
+        ...(pendingOut.outsideLocationNote
+          ? { outsideLocationNote: pendingOut.outsideLocationNote }
+          : {}),
+      });
       toast.success("Clock-out tercatat — wajah terverifikasi.");
       resetFlow();
       reloadSessions();
@@ -214,10 +233,10 @@ export function AttendanceFlow({
     setDialog("verify-out");
   };
 
-  const handleClockOut = () => {
-    if (!employee || !openSession) return;
+  const proceedAfterClockOutGps = (partial: typeof pendingOut) => {
+    setPendingOut((p) => ({ ...p, ...partial }));
     const needsReason =
-      !openSession.isOutsideOffice &&
+      !partial.isOutsideOffice &&
       effectiveShift &&
       isShiftActiveOn(effectiveShift) &&
       isPastSchedule(effectiveShift.endTime, effectiveShift.earlyLeaveGraceMinutes);
@@ -226,6 +245,38 @@ export function AttendanceFlow({
       return;
     }
     proceedToClockOutFace();
+  };
+
+  const handleClockOut = () => {
+    if (!employee || !openSession) return;
+    if (!navigator.geolocation || !officeConfigured || !effectiveLocation) {
+      proceedAfterClockOutGps({});
+      return;
+    }
+    setGpsLoading(true);
+    navigator.geolocation.getCurrentPosition(
+      (pos) => {
+        setGpsLoading(false);
+        const coords = { lat: String(pos.coords.latitude), long: String(pos.coords.longitude) };
+        const dist = distanceMeters(
+          pos.coords.latitude,
+          pos.coords.longitude,
+          effectiveLocation.lat!,
+          effectiveLocation.lng!,
+        );
+        if (dist > officeRadiusMeters) {
+          setPendingOut({ coords, distanceMeters: dist, isOutsideOffice: true });
+          setDialog("outside-out");
+          return;
+        }
+        proceedAfterClockOutGps({ coords, distanceMeters: dist, isOutsideOffice: false });
+      },
+      () => {
+        setGpsLoading(false);
+        toast.warning("Lokasi tidak tersedia — clock-out lanjut tanpa validasi GPS.");
+        proceedAfterClockOutGps({});
+      },
+    );
   };
 
   if (!employee) {
@@ -253,8 +304,8 @@ export function AttendanceFlow({
         <Button onClick={handleClockIn} disabled={!!openSession || gpsLoading || !company || busy}>
           <LogIn className="size-4" /> {gpsLoading ? "Mengambil lokasi…" : "Clock In"}
         </Button>
-        <Button onClick={handleClockOut} disabled={!openSession || busy} variant="secondary">
-          <LogOut className="size-4" /> Clock Out
+        <Button onClick={handleClockOut} disabled={!openSession || gpsLoading || busy} variant="secondary">
+          <LogOut className="size-4" /> {gpsLoading ? "Mengambil lokasi…" : "Clock Out"}
         </Button>
       </div>
       {sessions.length > 0 && !openSession && (
@@ -406,6 +457,47 @@ export function AttendanceFlow({
               </DialogFooter>
             </div>
           )}
+        </DialogContent>
+      </Dialog>
+
+      {/* Step 1-out: outside-office confirmation for Clock Out too — was missing entirely (the bug: distance was checked but nothing ever showed) */}
+      <Dialog open={dialog === "outside-out"} onOpenChange={(v) => !v && resetFlow()}>
+        <DialogContent className="sm:max-w-md">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2 text-amber-500">
+              <AlertTriangle className="size-5" />
+              Anda berada di luar area {effectiveLocation?.name ?? "kantor"}
+            </DialogTitle>
+            <DialogDescription>
+              Jarak Anda sekitar <strong>{pendingOut.distanceMeters?.toFixed(0)} meter</strong> dari
+              titik {effectiveLocation?.name ?? "kantor"} (radius yang diizinkan{" "}
+              {officeRadiusMeters}m). Berikan catatan singkat sebelum Clock Out dari sini.
+            </DialogDescription>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Catatan Lokasi</Label>
+              <Input
+                className="mt-2"
+                value={outsideNote}
+                onChange={(e) => setOutsideNote(e.target.value)}
+                placeholder="Contoh: Langsung pulang dari kantor klien"
+              />
+            </div>
+            <DialogFooter className="sm:justify-center">
+              <Button variant="outline" onClick={resetFlow}>
+                Batal
+              </Button>
+              <Button
+                disabled={!outsideNote.trim()}
+                onClick={() =>
+                  proceedAfterClockOutGps({ outsideLocationNote: outsideNote.trim() })
+                }
+              >
+                Lanjutkan ke FaceID
+              </Button>
+            </DialogFooter>
+          </div>
         </DialogContent>
       </Dialog>
 
