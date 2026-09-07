@@ -50,61 +50,55 @@ function DashboardComponent() {
 
   if (!currentUser) return null;
 
-  const handleSaveProfile = (e: React.FormEvent) => {
+  const handleSaveProfile = async (e: React.FormEvent) => {
     e.preventDefault();
-    const users = getStoredUsers();
-    const updatedUsers = users.map((u) =>
-      u.userId === currentUser.userId ? { ...u, fullName, phoneWA } : u,
-    );
-    saveUsers(updatedUsers);
-    const updatedSession = { ...currentUser, fullName, phoneWA };
-    setActiveSession(updatedSession);
-    setCurrentUser(updatedSession);
-    alert("Profil berhasil diperbarui!");
+    try {
+      await updateAdminProfile(currentUser.userId, { fullName, phoneWA });
+      const updatedSession = { ...currentUser, fullName, phoneWA };
+      setActiveSession(updatedSession);
+      setCurrentUser(updatedSession);
+      alert("Profil berhasil diperbarui!");
+    } catch {
+      alert("Gagal menyimpan profil. Periksa koneksi internet.");
+    }
   };
 
-  const handleChangePin = (e: React.FormEvent) => {
+  const handleChangePin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (oldPin !== currentUser.pin) {
-      alert("PIN Lama tidak sesuai!");
-      return;
-    }
     if (newPin.length !== 6) {
       alert("PIN Baru harus 6 digit!");
       return;
     }
-    const users = getStoredUsers();
-    const updatedUsers = users.map((u) =>
-      u.userId === currentUser.userId ? { ...u, pin: newPin } : u,
-    );
-    saveUsers(updatedUsers);
-    const updatedSession = { ...currentUser, pin: newPin };
-    setActiveSession(updatedSession);
-    setCurrentUser(updatedSession);
-    setOldPin("");
-    setNewPin("");
-    alert("PIN berhasil diubah!");
+    try {
+      const ok = await changeAdminPin(currentUser.userId, oldPin, newPin);
+      if (!ok) {
+        alert("PIN Lama tidak sesuai!");
+        return;
+      }
+      setOldPin("");
+      setNewPin("");
+      alert("PIN berhasil diubah!");
+    } catch {
+      alert("Gagal mengubah PIN. Periksa koneksi internet.");
+    }
   };
 
-  const handleAddAdmin = (e: React.FormEvent) => {
+  const handleAddAdmin = async (e: React.FormEvent) => {
     e.preventDefault();
-    const users = getStoredUsers();
-    if (users.some((u) => u.userId.toUpperCase() === newUserId.toUpperCase())) {
-      alert("User ID sudah digunakan!");
-      return;
+    try {
+      await createAdminUser({
+        userId: newUserId,
+        pin: newAdminPin,
+        fullName: newAdminName,
+        role: newAdminRole,
+      });
+      alert(`Pengguna baru ${newUserId.toUpperCase()} berhasil ditambahkan!`);
+      setNewUserId("");
+      setNewAdminPin("");
+      setNewAdminName("");
+    } catch {
+      alert("Gagal menambahkan pengguna. User ID mungkin sudah digunakan.");
     }
-    const newUser: UserProfile = {
-      userId: newUserId.toUpperCase(),
-      pin: newAdminPin,
-      fullName: newAdminName,
-      phoneWA: "",
-      role: newAdminRole,
-    };
-    saveUsers([...users, newUser]);
-    alert(`Pengguna baru ${newUserId} berhasil ditambahkan!`);
-    setNewUserId("");
-    setNewAdminPin("");
-    setNewAdminName("");
   };
 
   return (
