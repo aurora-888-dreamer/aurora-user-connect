@@ -136,6 +136,7 @@ export async function updateApplicantStatus(
       phone: target.phone,
       department: handoverDetails.department,
       position: "",
+      rank: "",
       employmentStatus: handoverDetails.employmentStatus,
       joinDate: new Date().toISOString().slice(0, 10),
       npwp: "",

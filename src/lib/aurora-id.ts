@@ -14,6 +14,18 @@ export interface UserProfile {
   fullName: string;
   phoneWA: string;
   role: UserRole;
+  /** null/"" = general admin (sees Core HRIS/ATS as usual). "Finance" = restricted to the Finance module only. */
+  department?: string;
+}
+
+/** True for department === "Finance" AND role === SUPER_ADMIN — full control (set salary/allowances). */
+export function isFinanceHead(profile: UserProfile): boolean {
+  return profile.department === "Finance" && profile.role === "SUPER_ADMIN";
+}
+
+/** True for any Finance-department account (Head or Admin Finance). */
+export function isFinanceDept(profile: UserProfile): boolean {
+  return profile.department === "Finance";
 }
 
 const SESSION_KEY = "aurora_active_session";
@@ -31,6 +43,7 @@ type AdminRow = {
   full_name: string;
   phone_wa: string | null;
   role: string;
+  department: string | null;
 };
 
 function toProfile(row: AdminRow): UserProfile {
@@ -39,13 +52,14 @@ function toProfile(row: AdminRow): UserProfile {
     fullName: row.full_name,
     phoneWA: row.phone_wa ?? "",
     role: (row.role as UserRole) ?? "OPERATOR",
+    ...(row.department ? { department: row.department } : {}),
   };
 }
 
 export async function listAdminUsers(): Promise<UserProfile[]> {
   const { data, error } = await supabase
     .from("hpm_admin_users")
-    .select("user_id, full_name, phone_wa, role")
+    .select("user_id, full_name, phone_wa, role, department")
     .eq("is_active", true)
     .order("created_at", { ascending: true });
   if (error) throw error;
@@ -58,7 +72,7 @@ export async function findAdminByCredentials(
 ): Promise<UserProfile | null> {
   const { data, error } = await supabase
     .from("hpm_admin_users")
-    .select("user_id, full_name, phone_wa, role, pin_hash")
+    .select("user_id, full_name, phone_wa, role, department, pin_hash")
     .ilike("user_id", userId.trim())
     .eq("is_active", true)
     .maybeSingle();
@@ -102,6 +116,7 @@ export async function createAdminUser(input: {
   fullName: string;
   phoneWA?: string;
   role: UserRole;
+  department?: string;
 }): Promise<UserProfile> {
   const companyId = await getOrCreateCompanyId();
   const { data, error } = await supabase
@@ -113,9 +128,10 @@ export async function createAdminUser(input: {
       full_name: input.fullName,
       phone_wa: input.phoneWA ?? "",
       role: input.role,
+      department: input.department || null,
       is_active: true,
     })
-    .select("user_id, full_name, phone_wa, role")
+    .select("user_id, full_name, phone_wa, role, department")
     .single();
   if (error) throw error;
   return toProfile(data as AdminRow);
