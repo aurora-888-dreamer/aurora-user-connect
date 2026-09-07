@@ -247,6 +247,7 @@ export type Database = {
           payroll_cutoff_day: number;
           pension_years_multiplier: number;
           pension_constant: number;
+          jht_rate_percent: number;
           phone: string | null;
           subscription_status: string;
           website: string | null;
@@ -266,6 +267,7 @@ export type Database = {
           payroll_cutoff_day?: number;
           pension_years_multiplier?: number;
           pension_constant?: number;
+          jht_rate_percent?: number;
           phone?: string | null;
           subscription_status?: string;
           website?: string | null;
@@ -285,6 +287,7 @@ export type Database = {
           payroll_cutoff_day?: number;
           pension_years_multiplier?: number;
           pension_constant?: number;
+          jht_rate_percent?: number;
           phone?: string | null;
           subscription_status?: string;
           website?: string | null;
@@ -327,7 +330,6 @@ export type Database = {
           health_allowance: number;
           insurance_allowance: number;
           overtime_rate_per_hour: number;
-          jht_deduction: number;
           performance_bonus: number;
         };
         Insert: {
@@ -364,7 +366,6 @@ export type Database = {
           health_allowance?: number;
           insurance_allowance?: number;
           overtime_rate_per_hour?: number;
-          jht_deduction?: number;
           performance_bonus?: number;
         };
         Update: {
@@ -401,7 +402,6 @@ export type Database = {
           health_allowance?: number;
           insurance_allowance?: number;
           overtime_rate_per_hour?: number;
-          jht_deduction?: number;
           performance_bonus?: number;
         };
         Relationships: [
@@ -483,6 +483,8 @@ export type Database = {
           name: string;
           type: string;
           address: string | null;
+          phone: string | null;
+          parent_location_id: string | null;
           lat: number | null;
           lng: number | null;
           radius_meters: number;
@@ -494,6 +496,8 @@ export type Database = {
           name: string;
           type?: string;
           address?: string | null;
+          phone?: string | null;
+          parent_location_id?: string | null;
           lat?: number | null;
           lng?: number | null;
           radius_meters?: number;
@@ -505,6 +509,8 @@ export type Database = {
           name?: string;
           type?: string;
           address?: string | null;
+          phone?: string | null;
+          parent_location_id?: string | null;
           lat?: number | null;
           lng?: number | null;
           radius_meters?: number;
@@ -516,6 +522,13 @@ export type Database = {
             columns: ["company_id"];
             isOneToOne: false;
             referencedRelation: "hpm_companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "hpm_locations_parent_location_id_fkey";
+            columns: ["parent_location_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_locations";
             referencedColumns: ["id"];
           },
         ];
