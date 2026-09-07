@@ -2,7 +2,7 @@ import { createFileRoute, useNavigate } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { Badge } from "@/components/ui/badge";
-import { getActiveSession, getStoredUsers, type UserProfile } from "@/lib/aurora-id";
+import { getActiveSession, listAdminUsers, type UserProfile } from "@/lib/aurora-id";
 
 export const Route = createFileRoute("/directory")({
   head: () => ({
