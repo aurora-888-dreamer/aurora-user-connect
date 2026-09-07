@@ -274,9 +274,10 @@ function StaffSetupPage() {
                 mode="enroll"
                 employeeName={account.fullName}
                 onClose={() => setShowFaceDialog(false)}
-                onEnrolled={async ({ descriptor }) => {
+                onEnrolled={async ({ descriptor, photoDataUrl }) => {
                   await updateStaffAccount(account.id, {
                     faceDescriptor: descriptor,
+                    facePhoto: photoDataUrl,
                     faceEnrolled: true,
                   });
                   setFaceDone(true);
