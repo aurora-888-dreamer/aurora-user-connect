@@ -896,6 +896,88 @@ export type Database = {
           },
         ]
       }
+      hpm_outside_requests: {
+        Row: {
+          action: string
+          company_id: string | null
+          created_at: string
+          decided_at: string | null
+          decision_note: string | null
+          distance_meters: number | null
+          employee_id: string
+          id: string
+          lat: string | null
+          location_note: string | null
+          long: string | null
+          photo_url: string | null
+          requested_at: string
+          stage: string
+          status: string
+          supervisor_employee_id: string | null
+          task_status: string | null
+        }
+        Insert: {
+          action: string
+          company_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision_note?: string | null
+          distance_meters?: number | null
+          employee_id: string
+          id?: string
+          lat?: string | null
+          location_note?: string | null
+          long?: string | null
+          photo_url?: string | null
+          requested_at?: string
+          stage?: string
+          status?: string
+          supervisor_employee_id?: string | null
+          task_status?: string | null
+        }
+        Update: {
+          action?: string
+          company_id?: string | null
+          created_at?: string
+          decided_at?: string | null
+          decision_note?: string | null
+          distance_meters?: number | null
+          employee_id?: string
+          id?: string
+          lat?: string | null
+          location_note?: string | null
+          long?: string | null
+          photo_url?: string | null
+          requested_at?: string
+          stage?: string
+          status?: string
+          supervisor_employee_id?: string | null
+          task_status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "hpm_outside_requests_company_id_fkey"
+            columns: ["company_id"]
+            isOneToOne: false
+            referencedRelation: "hpm_companies"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hpm_outside_requests_employee_id_fkey"
+            columns: ["employee_id"]
+            isOneToOne: false
+            referencedRelation: "hpm_employees"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "hpm_outside_requests_supervisor_employee_id_fkey"
+            columns: ["supervisor_employee_id"]
+            isOneToOne: false
+            referencedRelation: "hpm_employees"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hpm_payrolls: {
         Row: {
           allowances: number | null
