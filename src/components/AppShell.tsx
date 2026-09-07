@@ -1,13 +1,29 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { LayoutDashboard, Users, Briefcase, Database, LogOut, Settings } from "lucide-react";
+import {
+  LayoutDashboard,
+  Users,
+  Briefcase,
+  Database,
+  LogOut,
+  Settings,
+  Landmark,
+} from "lucide-react";
 import type { ReactNode } from "react";
-import { getActiveSession, setActiveSession } from "@/lib/aurora-id";
+import { getActiveSession, setActiveSession, isFinanceDept } from "@/lib/aurora-id";
 
-const tools = [
+const GENERAL_TOOLS = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/hris", label: "Core HRIS", icon: Users },
   { to: "/ats", label: "ATS Recruitment", icon: Briefcase },
   { to: "/directory", label: "User ID Directory", icon: Database },
+  { to: "/settings", label: "Pengaturan", icon: Settings },
+] as const;
+
+// Departemen Finance TIDAK BISA masuk Core HRIS / ATS Recruitment — hanya
+// Dashboard, modul Finance, dan Pengaturan.
+const FINANCE_TOOLS = [
+  { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
+  { to: "/finance", label: "Finance", icon: Landmark },
   { to: "/settings", label: "Pengaturan", icon: Settings },
 ] as const;
 
@@ -22,6 +38,7 @@ export function AppShell({
 }) {
   const navigate = useNavigate();
   const session = getActiveSession();
+  const tools = session && isFinanceDept(session) ? FINANCE_TOOLS : GENERAL_TOOLS;
 
   const handleLogout = () => {
     setActiveSession(null);
@@ -120,4 +137,3 @@ export function AppShell({
     </div>
   );
 }
-

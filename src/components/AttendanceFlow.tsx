@@ -23,18 +23,20 @@ import { MapPin, LogIn, LogOut, ScanFace, AlertTriangle, History } from "lucide-
 import { FaceCaptureDialog } from "@/components/FaceCaptureDialog";
 import {
   getCompanyProfile,
-  isOfficeLocationSet,
   distanceMeters,
   isPastSchedule,
-  DEFAULT_OFFICE_RADIUS_METERS,
   type CompanyProfile,
 } from "@/lib/company-data";
 import {
   clockIn,
   clockOut,
   getTodaySessionsFor,
+  resolveEffectiveLocation,
+  resolveEffectiveShift,
+  isShiftActiveOn,
   type Employee,
   type AttendanceRecord,
+  type ShiftType,
 } from "@/lib/hris-data";
 
 export function AttendanceFlow({
@@ -46,7 +48,7 @@ export function AttendanceFlow({
 }) {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [dialog, setDialog] = useState<
-    null | "outside" | "late-in" | "late-out" | "enroll-needed" | "verify"
+    null | "outside" | "late-in" | "late-out" | "enroll-needed" | "verify" | "verify-out"
   >(null);
   const [outsideConfirmed, setOutsideConfirmed] = useState(false);
   const [outsideNote, setOutsideNote] = useState("");
@@ -54,6 +56,13 @@ export function AttendanceFlow({
   const [lateInReasonText, setLateInReasonText] = useState("");
   const [lateOutReasonText, setLateOutReasonText] = useState("");
   const [company, setCompany] = useState<CompanyProfile | null>(null);
+  const [effectiveLocation, setEffectiveLocation] = useState<{
+    name: string;
+    lat: number | null;
+    lng: number | null;
+    radiusMeters: number;
+  } | null>(null);
+  const [effectiveShift, setEffectiveShift] = useState<ShiftType | null>(null);
   const [sessions, setSessions] = useState<AttendanceRecord[]>([]);
   const [busy, setBusy] = useState(false);
   const [pending, setPending] = useState<{
@@ -64,6 +73,7 @@ export function AttendanceFlow({
     outsideTaskStatus?: string;
     lateInReason?: string;
   }>({});
+  const [pendingOutReason, setPendingOutReason] = useState<string | undefined>(undefined);
 
   const openSession = sessions.find((s) => !s.clockOut) ?? null;
 
@@ -83,10 +93,24 @@ export function AttendanceFlow({
       .catch(() => toast.error("Gagal memuat pengaturan kantor."));
   }, []);
 
+  useEffect(() => {
+    if (!employee) {
+      setEffectiveLocation(null);
+      setEffectiveShift(null);
+      return;
+    }
+    resolveEffectiveLocation(employee)
+      .then(setEffectiveLocation)
+      .catch(() => setEffectiveLocation(null));
+    resolveEffectiveShift(employee)
+      .then(setEffectiveShift)
+      .catch(() => setEffectiveShift(null));
+  }, [employee]);
+
   useEffect(reloadSessions, [employee]);
 
-  const officeRadiusMeters = company?.officeRadiusMeters ?? DEFAULT_OFFICE_RADIUS_METERS;
-  const officeConfigured = company ? isOfficeLocationSet(company) : false;
+  const officeRadiusMeters = effectiveLocation?.radiusMeters ?? 30;
+  const officeConfigured = !!(effectiveLocation?.lat && effectiveLocation?.lng);
 
   const resetFlow = () => {
     setDialog(null);
@@ -96,12 +120,18 @@ export function AttendanceFlow({
     setLateInReasonText("");
     setLateOutReasonText("");
     setPending({});
+    setPendingOutReason(undefined);
   };
 
   const proceedAfterGps = (partial: typeof pending) => {
     setPending((p) => ({ ...p, ...partial }));
     const isFirstSessionToday = sessions.length === 0;
-    if (isFirstSessionToday && company && isPastSchedule(company.workStartTime, 15)) {
+    if (
+      isFirstSessionToday &&
+      effectiveShift &&
+      isShiftActiveOn(effectiveShift) &&
+      isPastSchedule(effectiveShift.startTime, effectiveShift.lateGraceMinutes)
+    ) {
       setDialog("late-in");
       return;
     }
@@ -132,12 +162,12 @@ export function AttendanceFlow({
       (pos) => {
         setGpsLoading(false);
         const coords = { lat: String(pos.coords.latitude), long: String(pos.coords.longitude) };
-        if (officeConfigured) {
+        if (officeConfigured && effectiveLocation) {
           const dist = distanceMeters(
             pos.coords.latitude,
             pos.coords.longitude,
-            company.officeLat!,
-            company.officeLng!,
+            effectiveLocation.lat!,
+            effectiveLocation.lng!,
           );
           if (dist > officeRadiusMeters) {
             setPending({ coords, distanceMeters: dist, isOutsideOffice: true });
@@ -157,12 +187,12 @@ export function AttendanceFlow({
     );
   };
 
-  const performClockOut = async (reason?: string) => {
+  const performClockOut = async (photoDataUrl: string, reason?: string) => {
     if (!employee) return;
     setBusy(true);
     try {
       await clockOut(employee.id, reason);
-      toast.success("Clock-out tercatat.");
+      toast.success("Clock-out tercatat — wajah terverifikasi.");
       resetFlow();
       reloadSessions();
       onChange();
@@ -173,15 +203,26 @@ export function AttendanceFlow({
     }
   };
 
+  const proceedToClockOutFace = () => {
+    if (!employee?.faceDescriptor) {
+      setDialog("enroll-needed");
+      return;
+    }
+    setDialog("verify-out");
+  };
+
   const handleClockOut = () => {
     if (!employee || !openSession) return;
     const needsReason =
-      !openSession.isOutsideOffice && company && isPastSchedule(company.workEndTime, 60);
+      !openSession.isOutsideOffice &&
+      effectiveShift &&
+      isShiftActiveOn(effectiveShift) &&
+      isPastSchedule(effectiveShift.endTime, effectiveShift.earlyLeaveGraceMinutes);
     if (needsReason) {
       setDialog("late-out");
       return;
     }
-    performClockOut();
+    proceedToClockOutFace();
   };
 
   if (!employee) {
@@ -193,8 +234,9 @@ export function AttendanceFlow({
       {company && !officeConfigured && (
         <p className="mb-3 flex items-center gap-1.5 text-xs text-amber-500">
           <AlertTriangle className="size-3.5" />
-          Titik lokasi kantor belum diatur — buka menu <strong>Pengaturan</strong> agar validasi
-          radius {officeRadiusMeters}m bisa aktif.
+          Titik lokasi {effectiveLocation?.name ?? "kantor"} belum diatur — atur di menu{" "}
+          <strong>Pengaturan</strong> atau <strong>Lokasi</strong> agar validasi radius{" "}
+          {officeRadiusMeters}m bisa aktif.
         </p>
       )}
       {!employee.faceDescriptor && (
@@ -283,12 +325,12 @@ export function AttendanceFlow({
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2 text-amber-500">
               <AlertTriangle className="size-5" />
-              Anda berada di luar area kantor
+              Anda berada di luar area {effectiveLocation?.name ?? "kantor"}
             </DialogTitle>
             <DialogDescription>
               Jarak Anda sekitar <strong>{pending.distanceMeters?.toFixed(0)} meter</strong> dari
-              titik kantor (radius yang diizinkan {officeRadiusMeters}m). Apakah Anda tetap ingin
-              melakukan absensi?
+              titik {effectiveLocation?.name ?? "kantor"} (radius yang diizinkan{" "}
+              {officeRadiusMeters}m). Apakah Anda tetap ingin melakukan absensi?
             </DialogDescription>
           </DialogHeader>
 
@@ -351,8 +393,10 @@ export function AttendanceFlow({
               Anda terlambat masuk
             </DialogTitle>
             <DialogDescription>
-              Sudah lebih dari 15 menit dari jam masuk ({company?.workStartTime}). Berikan alasan
-              keterlambatan — HRD akan memutuskan apakah perlu persetujuan atasan.
+              Sudah lebih dari {effectiveShift?.lateGraceMinutes ?? 15} menit dari jam masuk{" "}
+              {effectiveShift?.name ? `shift ${effectiveShift.name}` : ""} (
+              {effectiveShift?.startTime}). Berikan alasan keterlambatan — HRD akan memutuskan
+              apakah perlu persetujuan atasan.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -383,8 +427,9 @@ export function AttendanceFlow({
               Pulang lebih dari 60 menit dari jadwal
             </DialogTitle>
             <DialogDescription>
-              Jam pulang terjadwal {company?.workEndTime}. Berikan alasan — HRD akan memutuskan
-              apakah perlu persetujuan atasan.
+              Jam pulang terjadwal {effectiveShift?.name ? `shift ${effectiveShift.name}` : ""}{" "}
+              {effectiveShift?.endTime}. Berikan alasan — HRD akan memutuskan apakah perlu
+              persetujuan atasan.
             </DialogDescription>
           </DialogHeader>
           <div className="space-y-4">
@@ -399,10 +444,13 @@ export function AttendanceFlow({
             </div>
             <DialogFooter className="sm:justify-center">
               <Button
-                disabled={!lateOutReasonText.trim() || busy}
-                onClick={() => performClockOut(lateOutReasonText.trim())}
+                disabled={!lateOutReasonText.trim()}
+                onClick={() => {
+                  setPendingOutReason(lateOutReasonText.trim());
+                  proceedToClockOutFace();
+                }}
               >
-                {busy ? "Menyimpan…" : "Konfirmasi Clock Out"}
+                Lanjutkan ke FaceID
               </Button>
             </DialogFooter>
           </div>
@@ -467,6 +515,27 @@ export function AttendanceFlow({
             resetFlow();
             reloadSessions();
             onChange();
+          }}
+        />
+      )}
+
+      {/* Step 3: FaceID verification for Clock Out too — confirms it's really this person leaving */}
+      {dialog === "verify-out" && employee.faceDescriptor && (
+        <FaceCaptureDialog
+          open
+          mode="verify"
+          employeeName={employee.fullName}
+          enrolledDescriptor={employee.faceDescriptor}
+          onClose={resetFlow}
+          onVerified={async (result) => {
+            if (result.matched) {
+              await performClockOut(result.photoDataUrl, pendingOutReason);
+            } else {
+              toast.error(
+                `Wajah tidak cocok (jarak ${result.distance.toFixed(2)}). Clock-out ditolak.`,
+              );
+              resetFlow();
+            }
           }}
         />
       )}
