@@ -1,5 +1,4 @@
 import { Link, useNavigate } from "@tanstack/react-router";
-import { useRef } from "react";
 import {
   LayoutDashboard,
   Users,
@@ -8,6 +7,8 @@ import {
   LogOut,
   Settings,
   Landmark,
+  Mic,
+  MessageSquareText,
 } from "lucide-react";
 import type { ReactNode } from "react";
 import {
@@ -15,6 +16,7 @@ import {
   setActiveSession,
   isFinanceDept,
   isDeveloperAdmin,
+  isTopAdmin,
 } from "@/lib/admin-auth";
 
 const GENERAL_TOOLS = [
@@ -33,9 +35,11 @@ const FINANCE_TOOLS = [
   { to: "/settings", label: "Pengaturan", icon: Settings },
 ] as const;
 
-// Akun Admin Developer Aurora — semua menu terbuka, termasuk Finance,
-// terlepas dari aturan departemen.
-const DEVELOPER_TOOLS = [
+// Top Admin (otomatis untuk level Direktur) dan akun Developer Aurora —
+// semua menu terbuka, termasuk Finance, terlepas dari aturan departemen.
+// Dev Console TIDAK ada di sini — itu cuma lewat gestur gear-klik-3x, dan
+// halamannya sendiri yang membatasi ke akun is_developer saja.
+const FULL_ACCESS_TOOLS = [
   { to: "/dashboard", label: "Dashboard", icon: LayoutDashboard },
   { to: "/hris", label: "Core HRIS", icon: Users },
   { to: "/ats", label: "ATS Recruitment", icon: Briefcase },
@@ -45,6 +49,19 @@ const DEVELOPER_TOOLS = [
 ] as const;
 
 const GEAR_CLICK_WINDOW_MS = 600;
+
+// Aplikasi lain Aurora — link cepat, terbuka untuk semua admin (bukan cuma developer).
+const ECOSYSTEM_LINKS = [
+  { name: "Noble Smart Voice", url: "https://noble-smart-voice.lovable.app", icon: Mic },
+  { name: "Magic Talk", url: "https://magic-talk.lovable.app", icon: MessageSquareText },
+] as const;
+
+// Module-level (not useRef!) on purpose — every click on the gear navigates
+// to /settings, which unmounts and remounts this whole AppShell on the
+// destination page. A useRef would reset to 0 on every single click before
+// it could ever reach 3; a module-level variable survives that remount for
+// as long as the SPA stays loaded, so the rapid-click gesture actually works.
+const gearClickState = { count: 0, lastAt: 0 };
 
 export function AppShell({
   title,
@@ -57,14 +74,12 @@ export function AppShell({
 }) {
   const navigate = useNavigate();
   const session = getActiveSession();
-  const developer = !!session && isDeveloperAdmin(session);
-  const tools = developer
-    ? DEVELOPER_TOOLS
+  const hasFullAccess = !!session && (isDeveloperAdmin(session) || isTopAdmin(session));
+  const tools = hasFullAccess
+    ? FULL_ACCESS_TOOLS
     : session && isFinanceDept(session)
       ? FINANCE_TOOLS
       : GENERAL_TOOLS;
-
-  const gearClicks = useRef<{ count: number; lastAt: number }>({ count: 0, lastAt: 0 });
 
   const handleLogout = () => {
     setActiveSession(null);
@@ -75,12 +90,12 @@ export function AppShell({
   // khusus untuk akun Admin Developer. Klik biasa tetap ke /settings seperti biasa.
   const handleGearClick = (e: React.MouseEvent) => {
     const now = Date.now();
-    const state = gearClicks.current;
-    state.count = now - state.lastAt <= GEAR_CLICK_WINDOW_MS ? state.count + 1 : 1;
-    state.lastAt = now;
-    if (state.count >= 3) {
+    gearClickState.count =
+      now - gearClickState.lastAt <= GEAR_CLICK_WINDOW_MS ? gearClickState.count + 1 : 1;
+    gearClickState.lastAt = now;
+    if (gearClickState.count >= 3) {
       e.preventDefault();
-      state.count = 0;
+      gearClickState.count = 0;
       navigate({ to: "/dev-console" });
     }
   };
@@ -133,6 +148,25 @@ export function AppShell({
             </button>
           </div>
         )}
+
+        <div className="mt-4 space-y-1">
+          <p className="px-3 text-[0.6rem] uppercase tracking-[0.2em] text-muted-foreground">
+            Ekosistem Aurora
+          </p>
+          {ECOSYSTEM_LINKS.map(({ name, url, icon: Icon }) => (
+            <a
+              key={url}
+              href={url}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="flex items-center gap-3 rounded-xl px-3 py-2 text-xs text-sidebar-foreground/60 transition-colors hover:bg-sidebar-accent hover:text-sidebar-accent-foreground"
+            >
+              <Icon className="size-3.5" />
+              {name}
+            </a>
+          ))}
+        </div>
+
         <p className="mt-4 text-[0.65rem] uppercase tracking-[0.2em] text-muted-foreground">
           Designed by Aurora Master
         </p>
@@ -165,6 +199,18 @@ export function AppShell({
                   Keluar
                 </button>
               )}
+              <span className="mx-1 w-px shrink-0 bg-border" />
+              {ECOSYSTEM_LINKS.map(({ name, url }) => (
+                <a
+                  key={url}
+                  href={url}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="whitespace-nowrap rounded-full border border-border px-3 py-1.5 text-xs text-muted-foreground/70"
+                >
+                  {name}
+                </a>
+              ))}
             </nav>
           </header>
 
