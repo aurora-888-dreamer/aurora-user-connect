@@ -81,6 +81,10 @@ import {
   type FamilyData,
   type Religion,
   RELIGIONS,
+  type PositionLevel,
+  POSITION_LEVELS,
+  type BloodType,
+  BLOOD_TYPES,
   getLocations,
   addLocation,
   updateLocation,
@@ -237,6 +241,8 @@ const emptyForm = {
   department: "",
   position: "",
   rank: "",
+  positionLevel: "Staff" as PositionLevel,
+  bloodType: "" as BloodType | "",
   locationId: "",
   shiftTypeId: "",
   bankName: "",
@@ -246,16 +252,17 @@ const emptyForm = {
   joinDate: new Date().toISOString().slice(0, 10),
   npwp: "",
   ptkpStatus: "TK/0" as PtkpStatus,
-  basicSalary: "",
   supervisorId: "",
   religion: "" as Religion | "",
   maritalStatus: "" as MaritalStatus | "",
   spouseName: "",
-  childrenCount: "",
-  childrenNames: "",
+  spouseWhatsapp: "",
+  children: [] as { name: string; whatsapp: string }[],
   fatherName: "",
+  fatherWhatsapp: "",
   motherName: "",
-  siblingsCount: "",
+  motherWhatsapp: "",
+  siblings: [] as { name: string; whatsapp: string }[],
 };
 
 function EmployeeFormDialog({
@@ -295,6 +302,8 @@ function EmployeeFormDialog({
             department: editing.department,
             position: editing.position,
             rank: editing.rank,
+            positionLevel: editing.positionLevel ?? "Staff",
+            bloodType: editing.bloodType ?? "",
             locationId: editing.locationId ?? "",
             shiftTypeId: editing.shiftTypeId ?? "",
             bankName: editing.bankName ?? "",
@@ -304,24 +313,27 @@ function EmployeeFormDialog({
             joinDate: editing.joinDate || new Date().toISOString().slice(0, 10),
             npwp: editing.npwp,
             ptkpStatus: editing.ptkpStatus,
-            basicSalary: String(editing.basicSalary),
             supervisorId: editing.supervisorId ?? "",
             religion: fd?.religion ?? "",
             maritalStatus: fd?.maritalStatus ?? "",
-            spouseName: fd?.spouseName ?? "",
-            childrenCount: fd?.childrenCount !== undefined ? String(fd.childrenCount) : "",
-            childrenNames: fd?.childrenNames ?? "",
-            fatherName: fd?.fatherName ?? "",
-            motherName: fd?.motherName ?? "",
-            siblingsCount: fd?.siblingsCount !== undefined ? String(fd.siblingsCount) : "",
+            spouseName: fd?.spouse?.name ?? "",
+            spouseWhatsapp: fd?.spouse?.whatsapp ?? "",
+            children:
+              fd?.children?.map((c) => ({ name: c.name ?? "", whatsapp: c.whatsapp ?? "" })) ?? [],
+            fatherName: fd?.father?.name ?? "",
+            fatherWhatsapp: fd?.father?.whatsapp ?? "",
+            motherName: fd?.mother?.name ?? "",
+            motherWhatsapp: fd?.mother?.whatsapp ?? "",
+            siblings:
+              fd?.siblings?.map((s) => ({ name: s.name ?? "", whatsapp: s.whatsapp ?? "" })) ?? [],
           }
         : emptyForm,
     );
   }, [open, editing]);
 
   const handleSubmit = async () => {
-    if (!form.fullName.trim() || !form.nik.trim() || !form.basicSalary) {
-      toast.error("Lengkapi NIK, nama, dan gaji pokok.");
+    if (!form.fullName.trim() || !form.nik.trim()) {
+      toast.error("Lengkapi NIK dan nama.");
       return;
     }
     setSubmitting(true);
@@ -331,14 +343,19 @@ function EmployeeFormDialog({
         ...(form.maritalStatus ? { maritalStatus: form.maritalStatus } : {}),
         ...(form.maritalStatus === "Menikah"
           ? {
-              ...(form.spouseName ? { spouseName: form.spouseName } : {}),
-              ...(form.childrenCount ? { childrenCount: Number(form.childrenCount) } : {}),
-              ...(form.childrenNames ? { childrenNames: form.childrenNames } : {}),
+              ...(form.spouseName || form.spouseWhatsapp
+                ? { spouse: { name: form.spouseName, whatsapp: form.spouseWhatsapp } }
+                : {}),
+              ...(form.children.length > 0 ? { children: form.children } : {}),
             }
           : {
-              ...(form.fatherName ? { fatherName: form.fatherName } : {}),
-              ...(form.motherName ? { motherName: form.motherName } : {}),
-              ...(form.siblingsCount ? { siblingsCount: Number(form.siblingsCount) } : {}),
+              ...(form.fatherName || form.fatherWhatsapp
+                ? { father: { name: form.fatherName, whatsapp: form.fatherWhatsapp } }
+                : {}),
+              ...(form.motherName || form.motherWhatsapp
+                ? { mother: { name: form.motherName, whatsapp: form.motherWhatsapp } }
+                : {}),
+              ...(form.siblings.length > 0 ? { siblings: form.siblings } : {}),
             }),
       };
       const payload = {
@@ -349,6 +366,8 @@ function EmployeeFormDialog({
         department: form.department || "General",
         position: form.position,
         rank: form.rank,
+        positionLevel: form.positionLevel,
+        ...(form.bloodType ? { bloodType: form.bloodType } : {}),
         ...(form.locationId ? { locationId: form.locationId } : {}),
         ...(form.shiftTypeId ? { shiftTypeId: form.shiftTypeId } : {}),
         bankName: form.bankName,
@@ -358,7 +377,6 @@ function EmployeeFormDialog({
         joinDate: form.joinDate,
         npwp: form.npwp,
         ptkpStatus: form.ptkpStatus,
-        basicSalary: Number(form.basicSalary),
         isActive: true,
         source: "MANUAL" as const,
         ...(form.supervisorId ? { supervisorId: form.supervisorId } : {}),
@@ -499,6 +517,48 @@ function EmployeeFormDialog({
             />
           </div>
           <div>
+            <Label>Level Jabatan</Label>
+            <Select
+              value={form.positionLevel}
+              onValueChange={(v) => setForm({ ...form, positionLevel: v as PositionLevel })}
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {POSITION_LEVELS.map((l) => (
+                  <SelectItem key={l} value={l}>
+                    {l}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Menentukan siapa di Finance yang boleh lihat gajinya.
+            </p>
+          </div>
+          <div>
+            <Label>Golongan Darah</Label>
+            <Select
+              value={form.bloodType || "none"}
+              onValueChange={(v) =>
+                setForm({ ...form, bloodType: v === "none" ? "" : (v as BloodType) })
+              }
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Pilih golongan darah" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Belum diisi</SelectItem>
+                {BLOOD_TYPES.map((b) => (
+                  <SelectItem key={b} value={b}>
+                    {b}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+          <div>
             <Label>Lokasi Kerja</Label>
             <Select
               value={form.locationId || "default"}
@@ -608,16 +668,6 @@ function EmployeeFormDialog({
               </SelectContent>
             </Select>
           </div>
-          <div>
-            <Label>Gaji Pokok (Rp)</Label>
-            <Input
-              type="number"
-              className="mt-2"
-              value={form.basicSalary}
-              onChange={(e) => setForm({ ...form, basicSalary: e.target.value })}
-              placeholder="7500000"
-            />
-          </div>
         </div>
 
         <div className="mt-2 border-t border-border pt-4">
@@ -699,65 +749,180 @@ function EmployeeFormDialog({
           </div>
 
           {form.maritalStatus === "Menikah" ? (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <Label>Nama Pasangan</Label>
-                <Input
-                  className="mt-2"
-                  value={form.spouseName}
-                  onChange={(e) => setForm({ ...form, spouseName: e.target.value })}
-                />
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label>Nama Pasangan</Label>
+                  <Input
+                    className="mt-2"
+                    value={form.spouseName}
+                    onChange={(e) => setForm({ ...form, spouseName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>No. WhatsApp Pasangan</Label>
+                  <Input
+                    className="mt-2"
+                    value={form.spouseWhatsapp}
+                    onChange={(e) => setForm({ ...form, spouseWhatsapp: e.target.value })}
+                    placeholder="08xxxxxxxxxx"
+                  />
+                </div>
               </div>
+
               <div>
-                <Label>Jumlah Anak</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  className="mt-2"
-                  value={form.childrenCount}
-                  onChange={(e) => setForm({ ...form, childrenCount: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Nama Anak (pisahkan koma)</Label>
-                <Input
-                  className="mt-2"
-                  value={form.childrenNames}
-                  onChange={(e) => setForm({ ...form, childrenNames: e.target.value })}
-                  placeholder="Ani (2015), Budi (2018)"
-                />
+                <div className="flex items-center justify-between">
+                  <Label>Anak</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setForm({ ...form, children: [...form.children, { name: "", whatsapp: "" }] })
+                    }
+                  >
+                    <UserPlus className="size-3.5" /> Tambah Anak
+                  </Button>
+                </div>
+                {form.children.length === 0 ? (
+                  <p className="mt-2 text-xs text-muted-foreground">Belum ada data anak.</p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {form.children.map((child, i) => (
+                      <div key={i} className="flex gap-2">
+                        <Input
+                          value={child.name}
+                          onChange={(e) => {
+                            const next = [...form.children];
+                            next[i] = { name: e.target.value, whatsapp: next[i]?.whatsapp ?? "" };
+                            setForm({ ...form, children: next });
+                          }}
+                          placeholder="Nama anak"
+                        />
+                        <Input
+                          value={child.whatsapp}
+                          onChange={(e) => {
+                            const next = [...form.children];
+                            next[i] = { name: next[i]?.name ?? "", whatsapp: e.target.value };
+                            setForm({ ...form, children: next });
+                          }}
+                          placeholder="No. WhatsApp"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setForm({ ...form, children: form.children.filter((_, j) => j !== i) })
+                          }
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ) : form.maritalStatus ? (
-            <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
-              <div>
-                <Label>Nama Ayah</Label>
-                <Input
-                  className="mt-2"
-                  value={form.fatherName}
-                  onChange={(e) => setForm({ ...form, fatherName: e.target.value })}
-                />
+            <div className="mt-4 space-y-4">
+              <div className="grid gap-4 sm:grid-cols-2">
+                <div>
+                  <Label>Nama Ayah</Label>
+                  <Input
+                    className="mt-2"
+                    value={form.fatherName}
+                    onChange={(e) => setForm({ ...form, fatherName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>No. WhatsApp Ayah</Label>
+                  <Input
+                    className="mt-2"
+                    value={form.fatherWhatsapp}
+                    onChange={(e) => setForm({ ...form, fatherWhatsapp: e.target.value })}
+                    placeholder="08xxxxxxxxxx"
+                  />
+                </div>
+                <div>
+                  <Label>Nama Ibu</Label>
+                  <Input
+                    className="mt-2"
+                    value={form.motherName}
+                    onChange={(e) => setForm({ ...form, motherName: e.target.value })}
+                  />
+                </div>
+                <div>
+                  <Label>No. WhatsApp Ibu</Label>
+                  <Input
+                    className="mt-2"
+                    value={form.motherWhatsapp}
+                    onChange={(e) => setForm({ ...form, motherWhatsapp: e.target.value })}
+                    placeholder="08xxxxxxxxxx"
+                  />
+                </div>
               </div>
+
               <div>
-                <Label>Nama Ibu</Label>
-                <Input
-                  className="mt-2"
-                  value={form.motherName}
-                  onChange={(e) => setForm({ ...form, motherName: e.target.value })}
-                />
-              </div>
-              <div>
-                <Label>Jumlah Saudara Kandung</Label>
-                <Input
-                  type="number"
-                  min={0}
-                  className="mt-2"
-                  value={form.siblingsCount}
-                  onChange={(e) => setForm({ ...form, siblingsCount: e.target.value })}
-                />
+                <div className="flex items-center justify-between">
+                  <Label>Saudara Kandung</Label>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant="outline"
+                    onClick={() =>
+                      setForm({ ...form, siblings: [...form.siblings, { name: "", whatsapp: "" }] })
+                    }
+                  >
+                    <UserPlus className="size-3.5" /> Tambah Saudara
+                  </Button>
+                </div>
+                {form.siblings.length === 0 ? (
+                  <p className="mt-2 text-xs text-muted-foreground">
+                    Belum ada data saudara kandung.
+                  </p>
+                ) : (
+                  <div className="mt-2 space-y-2">
+                    {form.siblings.map((sib, i) => (
+                      <div key={i} className="flex gap-2">
+                        <Input
+                          value={sib.name}
+                          onChange={(e) => {
+                            const next = [...form.siblings];
+                            next[i] = { name: e.target.value, whatsapp: next[i]?.whatsapp ?? "" };
+                            setForm({ ...form, siblings: next });
+                          }}
+                          placeholder="Nama saudara"
+                        />
+                        <Input
+                          value={sib.whatsapp}
+                          onChange={(e) => {
+                            const next = [...form.siblings];
+                            next[i] = { name: next[i]?.name ?? "", whatsapp: e.target.value };
+                            setForm({ ...form, siblings: next });
+                          }}
+                          placeholder="No. WhatsApp"
+                        />
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          onClick={() =>
+                            setForm({ ...form, siblings: form.siblings.filter((_, j) => j !== i) })
+                          }
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                )}
               </div>
             </div>
           ) : null}
+          <p className="mt-3 text-xs text-muted-foreground">
+            Nama &amp; nomor WhatsApp di atas juga dipakai sebagai kontak darurat.
+          </p>
         </div>
 
         <DialogFooter>
@@ -983,7 +1148,7 @@ function EmployeeTab({
                 <TableHead>Departemen</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>PTKP</TableHead>
-                <TableHead>Gaji Pokok</TableHead>
+                <TableHead>Level</TableHead>
                 <TableHead>FaceID</TableHead>
                 <TableHead />
               </TableRow>
@@ -998,7 +1163,7 @@ function EmployeeTab({
                     <Badge variant="secondary">{e.employmentStatus}</Badge>
                   </TableCell>
                   <TableCell className="font-mono text-xs">{e.ptkpStatus}</TableCell>
-                  <TableCell>{rupiah(e.basicSalary)}</TableCell>
+                  <TableCell className="text-xs">{e.positionLevel}</TableCell>
                   <TableCell>
                     {e.faceDescriptor ? (
                       <Badge className="gap-1 bg-primary/15 text-primary" variant="secondary">

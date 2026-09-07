@@ -22,9 +22,21 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Pencil, Landmark, ShieldCheck } from "lucide-react";
-import { getActiveSession, isFinanceDept, isFinanceHead, type UserProfile } from "@/lib/admin-auth";
-import { getEmployees, updateEmployee, type Employee } from "@/lib/hris-data";
+import { Pencil, Landmark, ShieldCheck, Lock } from "lucide-react";
+import {
+  getActiveSession,
+  isFinanceDept,
+  isFinanceDirector,
+  isFinanceHeadRole,
+  isDeveloperAdmin,
+  type UserProfile,
+} from "@/lib/admin-auth";
+import {
+  getEmployees,
+  updateEmployee,
+  isSeniorPositionLevel,
+  type Employee,
+} from "@/lib/hris-data";
 
 export const Route = createFileRoute("/finance")({
   head: () => ({
@@ -54,7 +66,8 @@ function FinancePage() {
       navigate({ to: "/" });
       return;
     }
-    if (!isFinanceDept(s)) {
+    // Aurora developer account bypasses department restrictions entirely.
+    if (!isFinanceDept(s) && !isDeveloperAdmin(s)) {
       toast.error("Halaman ini khusus departemen Finance.");
       navigate({ to: "/dashboard" });
       return;
@@ -76,27 +89,45 @@ function FinancePage() {
 
   if (!session) return null;
 
-  const headFinance = isFinanceHead(session);
+  // Direktur (SUPER_ADMIN di Finance) dan akun developer Aurora melihat semua
+  // level, termasuk Kepala Divisi/GM/Direktur. Head Finance & Admin Finance
+  // hanya melihat level Staff/Supervisor/Manager — baris level senior
+  // disembunyikan total, bukan cuma dikunci editnya.
+  const seesEverything = isFinanceDirector(session) || isDeveloperAdmin(session);
+  const canEdit = seesEverything || isFinanceHeadRole(session);
+  const visibleEmployees = seesEverything
+    ? employees
+    : employees.filter((e) => !isSeniorPositionLevel(e.positionLevel));
+  const hiddenSeniorCount = employees.length - visibleEmployees.length;
+
+  const roleLabel = isDeveloperAdmin(session)
+    ? "Admin Developer Aurora — akses penuh semua level."
+    : isFinanceDirector(session)
+      ? "Direktur — bisa lihat & atur gaji semua level, termasuk Kepala Divisi/GM."
+      : isFinanceHeadRole(session)
+        ? "Head Finance — bisa lihat & atur gaji level Staff/Supervisor/Manager. Level Kepala Divisi ke atas tidak ditampilkan."
+        : "Admin Finance — lihat data gaji, tunjangan, dan rekening level Staff/Supervisor/Manager (view only).";
 
   return (
-    <AppShell
-      title="Finance"
-      description={
-        headFinance
-          ? "Head/Director Finance — bisa mengatur gaji dan tunjangan tiap karyawan."
-          : "Admin Finance — lihat data gaji, tunjangan, dan rekening karyawan."
-      }
-    >
+    <AppShell title="Finance" description={roleLabel}>
       <div className="glass-panel flex items-center gap-2 p-4 text-sm text-muted-foreground">
         <ShieldCheck className="size-4 text-primary" />
         Modul ini terpisah dari Core HRIS &amp; ATS Recruitment — departemen Finance tidak memiliki
         akses ke keduanya.
       </div>
 
+      {!seesEverything && hiddenSeniorCount > 0 && (
+        <div className="glass-panel flex items-center gap-2 p-4 text-sm text-muted-foreground">
+          <Lock className="size-4 text-amber-500" />
+          {hiddenSeniorCount} karyawan level Kepala Divisi/GM/Direktur disembunyikan dari tampilan
+          ini — hanya Direktur yang bisa melihatnya.
+        </div>
+      )}
+
       <section className="glass-panel overflow-hidden">
         {loading ? (
           <p className="p-7 text-sm text-muted-foreground">Memuat…</p>
-        ) : employees.length === 0 ? (
+        ) : visibleEmployees.length === 0 ? (
           <p className="p-7 text-sm text-muted-foreground">Belum ada data karyawan.</p>
         ) : (
           <Table>
@@ -104,15 +135,15 @@ function FinancePage() {
               <TableRow>
                 <TableHead>Nama</TableHead>
                 <TableHead>Jabatan</TableHead>
-                <TableHead>Pangkat</TableHead>
+                <TableHead>Level</TableHead>
                 <TableHead>Gaji Pokok</TableHead>
                 <TableHead>Total Tunjangan</TableHead>
                 <TableHead>Rekening Bank</TableHead>
-                {headFinance && <TableHead />}
+                {canEdit && <TableHead />}
               </TableRow>
             </TableHeader>
             <TableBody>
-              {employees.map((e) => {
+              {visibleEmployees.map((e) => {
                 const totalAllowance =
                   (e.transportAllowance ?? 0) +
                   (e.mealAllowance ?? 0) +
@@ -124,8 +155,10 @@ function FinancePage() {
                   <TableRow key={e.id}>
                     <TableCell>{e.fullName}</TableCell>
                     <TableCell>{e.position || "—"}</TableCell>
-                    <TableCell>{e.rank || "—"}</TableCell>
-                    <TableCell>{rupiah(e.basicSalary)}</TableCell>
+                    <TableCell>
+                      <Badge variant="secondary">{e.positionLevel}</Badge>
+                    </TableCell>
+                    <TableCell>{rupiah(e.basicSalary ?? 0)}</TableCell>
                     <TableCell>{rupiah(totalAllowance)}</TableCell>
                     <TableCell className="text-xs">
                       {e.bankName ? (
@@ -139,7 +172,7 @@ function FinancePage() {
                         <Badge variant="outline">Belum diisi</Badge>
                       )}
                     </TableCell>
-                    {headFinance && (
+                    {canEdit && (
                       <TableCell>
                         <Button size="sm" variant="outline" onClick={() => setEditing(e)}>
                           <Pencil className="size-3.5" />
@@ -178,7 +211,7 @@ function FinanceEditDialog({
   onSaved: () => void;
 }) {
   const [form, setForm] = useState({
-    basicSalary: String(employee.basicSalary),
+    basicSalary: String(employee.basicSalary ?? 0),
     transportAllowance: String(employee.transportAllowance ?? 0),
     mealAllowance: String(employee.mealAllowance ?? 0),
     positionAllowance: String(employee.positionAllowance ?? 0),
