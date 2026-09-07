@@ -481,6 +481,10 @@ export type Database = {
           email: string | null
           employee_id: string | null
           face_descriptor: Json | null
+          face_photo: string | null
+          ktp_photo: string | null
+          ktp_extracted: Json | null
+          ktp_nik_match: boolean | null
           full_name: string
           id: string
           is_active: boolean
@@ -498,6 +502,10 @@ export type Database = {
           email?: string | null
           employee_id?: string | null
           face_descriptor?: Json | null
+          face_photo?: string | null
+          ktp_photo?: string | null
+          ktp_extracted?: Json | null
+          ktp_nik_match?: boolean | null
           full_name: string
           id?: string
           is_active?: boolean
@@ -515,6 +523,10 @@ export type Database = {
           email?: string | null
           employee_id?: string | null
           face_descriptor?: Json | null
+          face_photo?: string | null
+          ktp_photo?: string | null
+          ktp_extracted?: Json | null
+          ktp_nik_match?: boolean | null
           full_name?: string
           id?: string
           is_active?: boolean
