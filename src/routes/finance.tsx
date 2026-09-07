@@ -23,7 +23,7 @@ import {
 } from "@/components/ui/table";
 import { toast } from "sonner";
 import { Pencil, Landmark, ShieldCheck } from "lucide-react";
-import { getActiveSession, isFinanceDept, isFinanceHead, type UserProfile } from "@/lib/aurora-id";
+import { getActiveSession, isFinanceDept, isFinanceHead, type UserProfile } from "@/lib/admin-auth";
 import { getEmployees, updateEmployee, type Employee } from "@/lib/hris-data";
 
 export const Route = createFileRoute("/finance")({

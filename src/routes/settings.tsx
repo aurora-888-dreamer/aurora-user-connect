@@ -6,7 +6,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { toast } from "sonner";
 import { LocateFixed, Save, MapPin, Clock } from "lucide-react";
-import { getActiveSession } from "@/lib/aurora-id";
+import { getActiveSession } from "@/lib/admin-auth";
 import {
   getCompanyProfile,
   saveCompanyProfile,
