@@ -52,6 +52,41 @@ export type Database = {
           },
         ];
       };
+      hpm_announcements: {
+        Row: {
+          id: string;
+          company_id: string;
+          title: string;
+          body: string;
+          created_by_admin_id: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          title: string;
+          body: string;
+          created_by_admin_id?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          title?: string;
+          body?: string;
+          created_by_admin_id?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hpm_announcements_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       hpm_applicants: {
         Row: {
           ai_matching_score: number | null;
@@ -357,6 +392,73 @@ export type Database = {
             columns: ["company_id"];
             isOneToOne: false;
             referencedRelation: "hpm_companies";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      hpm_leave_requests: {
+        Row: {
+          id: string;
+          company_id: string;
+          employee_id: string;
+          supervisor_employee_id: string | null;
+          reason_category: string;
+          note: string | null;
+          start_date: string;
+          end_date: string;
+          status: string;
+          decided_at: string | null;
+          decision_note: string | null;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          employee_id: string;
+          supervisor_employee_id?: string | null;
+          reason_category: string;
+          note?: string | null;
+          start_date: string;
+          end_date: string;
+          status?: string;
+          decided_at?: string | null;
+          decision_note?: string | null;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          employee_id?: string;
+          supervisor_employee_id?: string | null;
+          reason_category?: string;
+          note?: string | null;
+          start_date?: string;
+          end_date?: string;
+          status?: string;
+          decided_at?: string | null;
+          decision_note?: string | null;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hpm_leave_requests_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "hpm_leave_requests_employee_id_fkey";
+            columns: ["employee_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_employees";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "hpm_leave_requests_supervisor_employee_id_fkey";
+            columns: ["supervisor_employee_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_employees";
             referencedColumns: ["id"];
           },
         ];
