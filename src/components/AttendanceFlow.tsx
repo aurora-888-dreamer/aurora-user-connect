@@ -19,7 +19,7 @@ import {
   DialogFooter,
 } from "@/components/ui/dialog";
 import { toast } from "sonner";
-import { MapPin, LogIn, LogOut, ScanFace, AlertTriangle, History } from "lucide-react";
+import { MapPin, LogIn, LogOut, ScanFace, AlertTriangle, History, Clock } from "lucide-react";
 import { FaceCaptureDialog } from "@/components/FaceCaptureDialog";
 import {
   getCompanyProfile,
@@ -42,9 +42,12 @@ import {
 export function AttendanceFlow({
   employee,
   onChange,
+  compact,
 }: {
   employee: Employee | null;
   onChange: () => void;
+  /** Staff Beranda: just Clock In/Out + one shifting "Masuk–Pulang" line, no photo/GPS/multi-session list — those live in Riwayat's log instead. */
+  compact?: boolean;
 }) {
   const [gpsLoading, setGpsLoading] = useState(false);
   const [dialog, setDialog] = useState<
@@ -261,7 +264,29 @@ export function AttendanceFlow({
         </p>
       )}
 
-      {sessions.length > 0 && (
+      {sessions.length > 0 &&
+        compact &&
+        // Beranda: just the latest session's times, shifting in place as the day goes on.
+        // Full detail (photo, GPS, semua sesi) ada di Riwayat, bukan di sini.
+        (() => {
+          const latest = sessions[sessions.length - 1]!;
+          return (
+            <p className="mt-4 flex items-center gap-2 text-sm text-muted-foreground">
+              <Clock className="size-4 text-primary" />
+              {latest.clockIn && (
+                <span>Masuk {new Date(latest.clockIn).toLocaleTimeString("id-ID")}</span>
+              )}
+              {latest.clockOut && (
+                <span>· Pulang {new Date(latest.clockOut).toLocaleTimeString("id-ID")}</span>
+              )}
+              {sessions.length > 1 && (
+                <span className="text-xs">({sessions.length} sesi hari ini — lihat Riwayat)</span>
+              )}
+            </p>
+          );
+        })()}
+
+      {sessions.length > 0 && !compact && (
         <div className="mt-4 space-y-2">
           <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
             <History className="size-3.5" /> Sesi hari ini ({sessions.length})
