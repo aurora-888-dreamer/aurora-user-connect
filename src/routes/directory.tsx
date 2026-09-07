@@ -30,7 +30,9 @@ function DirectoryPage() {
       return;
     }
     setReady(true);
-    setRows(getStoredUsers());
+    listAdminUsers()
+      .then(setRows)
+      .catch(() => setRows([]));
   }, [navigate]);
 
   if (!ready) return null;
