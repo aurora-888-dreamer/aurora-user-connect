@@ -23,10 +23,42 @@ import {
   TableRow,
 } from "@/components/ui/table";
 import { toast } from "sonner";
-import { Wallet, UserPlus, ScanFace, KeyRound, Copy } from "lucide-react";
+import {
+  Wallet,
+  UserPlus,
+  ScanFace,
+  KeyRound,
+  Copy,
+  Pencil,
+  Trash2,
+  ImageIcon,
+  IdCard,
+  CheckCircle2,
+  AlertTriangle,
+} from "lucide-react";
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+} from "@/components/ui/dialog";
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
 import { AttendanceFlow } from "@/components/AttendanceFlow";
 import {
   addEmployee,
+  updateEmployee,
+  deleteEmployee,
   clockOut,
   computePayroll,
   addPayroll,
@@ -129,7 +161,7 @@ function HrisPage() {
           </TabsList>
 
           <TabsContent value="employees" className="mt-6">
-            <EmployeeTab employees={employees} onChange={refresh} />
+            <EmployeeTab employees={employees} accounts={staffAccounts} onChange={refresh} />
           </TabsContent>
 
           <TabsContent value="attendance" className="mt-6">
@@ -149,29 +181,61 @@ function HrisPage() {
   );
 }
 
-function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange: () => void }) {
-  const [form, setForm] = useState({
-    nik: "",
-    fullName: "",
-    email: "",
-    phone: "",
-    department: "",
-    employmentStatus: "PKWT" as EmploymentStatus,
-    joinDate: new Date().toISOString().slice(0, 10),
-    npwp: "",
-    ptkpStatus: "TK/0" as PtkpStatus,
-    basicSalary: "",
-  });
+const emptyForm = {
+  nik: "",
+  fullName: "",
+  email: "",
+  phone: "",
+  department: "",
+  employmentStatus: "PKWT" as EmploymentStatus,
+  joinDate: new Date().toISOString().slice(0, 10),
+  npwp: "",
+  ptkpStatus: "TK/0" as PtkpStatus,
+  basicSalary: "",
+};
+
+function EmployeeFormDialog({
+  open,
+  onClose,
+  editing,
+  onSaved,
+}: {
+  open: boolean;
+  onClose: () => void;
+  editing: Employee | null;
+  onSaved: () => void;
+}) {
+  const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
 
-  const handleAdd = async () => {
+  useEffect(() => {
+    if (!open) return;
+    setForm(
+      editing
+        ? {
+            nik: editing.nik,
+            fullName: editing.fullName,
+            email: editing.email,
+            phone: editing.phone,
+            department: editing.department,
+            employmentStatus: editing.employmentStatus,
+            joinDate: editing.joinDate || new Date().toISOString().slice(0, 10),
+            npwp: editing.npwp,
+            ptkpStatus: editing.ptkpStatus,
+            basicSalary: String(editing.basicSalary),
+          }
+        : emptyForm,
+    );
+  }, [open, editing]);
+
+  const handleSubmit = async () => {
     if (!form.fullName.trim() || !form.nik.trim() || !form.basicSalary) {
       toast.error("Lengkapi NIK, nama, dan gaji pokok.");
       return;
     }
     setSubmitting(true);
     try {
-      await addEmployee({
+      const payload = {
         nik: form.nik,
         fullName: form.fullName,
         email: form.email,
@@ -183,23 +247,40 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
         ptkpStatus: form.ptkpStatus,
         basicSalary: Number(form.basicSalary),
         isActive: true,
-        source: "MANUAL",
-      });
-      toast.success(`Karyawan ${form.fullName} ditambahkan.`);
-      setForm({ ...form, nik: "", fullName: "", email: "", phone: "", basicSalary: "" });
-      onChange();
+        source: "MANUAL" as const,
+      };
+      if (editing) {
+        await updateEmployee(editing.id, payload);
+        toast.success(`Data ${form.fullName} diperbarui.`);
+      } else {
+        await addEmployee(payload);
+        toast.success(`Karyawan ${form.fullName} ditambahkan.`);
+      }
+      onSaved();
+      onClose();
     } catch {
-      toast.error("Gagal menambahkan karyawan. Coba lagi.");
+      toast.error(
+        editing
+          ? "Gagal menyimpan perubahan. Coba lagi."
+          : "Gagal menambahkan karyawan. Coba lagi.",
+      );
     } finally {
       setSubmitting(false);
     }
   };
 
   return (
-    <div className="space-y-6">
-      <section className="glass-panel p-7">
-        <h3 className="text-base font-semibold">Tambah Karyawan</h3>
-        <div className="mt-4 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+    <Dialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-2xl">
+        <DialogHeader>
+          <DialogTitle>
+            {editing ? `Edit Karyawan — ${editing.fullName}` : "Tambah Karyawan"}
+          </DialogTitle>
+          <DialogDescription>
+            {editing ? "Perbarui data karyawan ini." : "Isi data karyawan baru."}
+          </DialogDescription>
+        </DialogHeader>
+        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
           <div>
             <Label>NIK</Label>
             <Input
@@ -305,15 +386,160 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
             />
           </div>
         </div>
-        <Button onClick={handleAdd} className="mt-5" disabled={submitting}>
-          <UserPlus className="size-4" /> {submitting ? "Menyimpan…" : "Tambah Karyawan"}
+        <DialogFooter>
+          <Button variant="outline" onClick={onClose}>
+            Batal
+          </Button>
+          <Button onClick={handleSubmit} disabled={submitting}>
+            {submitting ? "Menyimpan…" : editing ? "Simpan Perubahan" : "Tambah Karyawan"}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EmployeePhotosDialog({
+  employee,
+  account,
+  onClose,
+}: {
+  employee: Employee;
+  account: StaffAccount | undefined;
+  onClose: () => void;
+}) {
+  return (
+    <Dialog open onOpenChange={(v) => !v && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Foto — {employee.fullName}</DialogTitle>
+          <DialogDescription>
+            Foto FaceID dan KTP yang didaftarkan staff sendiri lewat HP-nya.
+          </DialogDescription>
+        </DialogHeader>
+        {!account ? (
+          <p className="text-sm text-muted-foreground">
+            Karyawan ini belum punya akun staff — belum ada foto tersimpan.
+          </p>
+        ) : (
+          <div className="grid gap-5 sm:grid-cols-2">
+            <div>
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+                <ScanFace className="size-4 text-primary" /> Foto FaceID
+              </p>
+              <div className="aspect-square overflow-hidden rounded-xl border border-border bg-muted">
+                {account.facePhoto ? (
+                  <img
+                    src={account.facePhoto}
+                    alt="Foto FaceID"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                    Belum ada
+                  </div>
+                )}
+              </div>
+            </div>
+            <div>
+              <p className="mb-2 flex items-center gap-1.5 text-sm font-medium">
+                <IdCard className="size-4 text-primary" /> Foto KTP
+              </p>
+              <div className="aspect-[16/10] overflow-hidden rounded-xl border border-border bg-muted">
+                {account.ktpPhoto ? (
+                  <img
+                    src={account.ktpPhoto}
+                    alt="Foto KTP"
+                    className="h-full w-full object-cover"
+                  />
+                ) : (
+                  <div className="flex h-full w-full items-center justify-center text-xs text-muted-foreground">
+                    Belum ada
+                  </div>
+                )}
+              </div>
+              {account.ktpExtracted && (
+                <div className="mt-3 space-y-1 text-xs">
+                  {account.ktpNikMatch ? (
+                    <p className="flex items-center gap-1 text-primary">
+                      <CheckCircle2 className="size-3.5" /> NIK cocok data karyawan
+                    </p>
+                  ) : (
+                    <p className="flex items-center gap-1 text-destructive">
+                      <AlertTriangle className="size-3.5" /> NIK tidak cocok
+                    </p>
+                  )}
+                  <p>
+                    <span className="text-muted-foreground">NIK di KTP:</span>{" "}
+                    <span className="font-mono">{account.ktpExtracted.nik || "-"}</span>
+                  </p>
+                  <p>
+                    <span className="text-muted-foreground">Nama di KTP:</span>{" "}
+                    {account.ktpExtracted.fullName || "-"}
+                  </p>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
+        <DialogFooter>
+          <Button onClick={onClose}>Tutup</Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function EmployeeTab({
+  employees,
+  accounts,
+  onChange,
+}: {
+  employees: Employee[];
+  accounts: StaffAccount[];
+  onChange: () => void;
+}) {
+  const [formOpen, setFormOpen] = useState(false);
+  const [editing, setEditing] = useState<Employee | null>(null);
+  const [deleting, setDeleting] = useState<Employee | null>(null);
+  const [deletingBusy, setDeletingBusy] = useState(false);
+  const [viewingPhotosFor, setViewingPhotosFor] = useState<Employee | null>(null);
+
+  const accountByEmployeeId = new Map(accounts.map((a) => [a.employeeId, a]));
+
+  const handleDelete = async () => {
+    if (!deleting) return;
+    setDeletingBusy(true);
+    try {
+      await deleteEmployee(deleting.id);
+      toast.success(`${deleting.fullName} dihapus dari database karyawan.`);
+      setDeleting(null);
+      onChange();
+    } catch {
+      toast.error("Gagal menghapus karyawan. Coba lagi.");
+    } finally {
+      setDeletingBusy(false);
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="flex items-center justify-between">
+        <h3 className="text-base font-semibold">Database Karyawan</h3>
+        <Button
+          onClick={() => {
+            setEditing(null);
+            setFormOpen(true);
+          }}
+        >
+          <UserPlus className="size-4" /> Tambah Karyawan
         </Button>
-      </section>
+      </div>
 
       <section className="glass-panel overflow-hidden">
         {employees.length === 0 ? (
           <p className="p-7 text-sm text-muted-foreground">
-            Belum ada karyawan. Tambahkan lewat form di atas.
+            Belum ada karyawan. Tambahkan lewat tombol di atas.
           </p>
         ) : (
           <Table>
@@ -325,8 +551,8 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
                 <TableHead>Status</TableHead>
                 <TableHead>PTKP</TableHead>
                 <TableHead>Gaji Pokok</TableHead>
-                <TableHead>Sumber</TableHead>
                 <TableHead>FaceID</TableHead>
+                <TableHead />
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -341,24 +567,44 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
                   <TableCell className="font-mono text-xs">{e.ptkpStatus}</TableCell>
                   <TableCell>{rupiah(e.basicSalary)}</TableCell>
                   <TableCell>
-                    {e.source === "ATS_HANDOVER" ? (
-                      <Badge className="bg-primary/15 text-primary" variant="secondary">
-                        ATS Handover
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Manual</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
                     {e.faceDescriptor ? (
                       <Badge className="gap-1 bg-primary/15 text-primary" variant="secondary">
                         <ScanFace className="size-3" /> Terdaftar
                       </Badge>
                     ) : (
-                      <span className="flex items-center gap-1 text-xs text-muted-foreground">
-                        <ScanFace className="size-3.5" /> Menunggu staff daftar sendiri
-                      </span>
+                      <span className="text-xs text-muted-foreground">Belum</span>
                     )}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex gap-1.5">
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        title="Lihat foto FaceID & KTP"
+                        onClick={() => setViewingPhotosFor(e)}
+                      >
+                        <ImageIcon className="size-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        title="Edit"
+                        onClick={() => {
+                          setEditing(e);
+                          setFormOpen(true);
+                        }}
+                      >
+                        <Pencil className="size-3.5" />
+                      </Button>
+                      <Button
+                        size="sm"
+                        variant="outline"
+                        title="Hapus"
+                        onClick={() => setDeleting(e)}
+                      >
+                        <Trash2 className="size-3.5" />
+                      </Button>
+                    </div>
                   </TableCell>
                 </TableRow>
               ))}
@@ -371,6 +617,42 @@ function EmployeeTab({ employees, onChange }: { employees: Employee[]; onChange:
         <strong>Akun Staff</strong> untuk membuatkan akunnya). Admin tidak bisa mendaftarkan wajah
         karyawan dari sini.
       </p>
+
+      <EmployeeFormDialog
+        open={formOpen}
+        editing={editing}
+        onClose={() => setFormOpen(false)}
+        onSaved={onChange}
+      />
+
+      {viewingPhotosFor && (
+        <EmployeePhotosDialog
+          employee={viewingPhotosFor}
+          account={accountByEmployeeId.get(viewingPhotosFor.id)}
+          onClose={() => setViewingPhotosFor(null)}
+        />
+      )}
+
+      <AlertDialog open={!!deleting} onOpenChange={(v) => !v && setDeleting(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Hapus {deleting?.fullName}?</AlertDialogTitle>
+            <AlertDialogDescription>
+              Data karyawan ini akan dihapus permanen dari database.
+              {deleting && accountByEmployeeId.has(deleting.id)
+                ? " Karyawan ini punya akun staff — akun staffnya tidak ikut terhapus, tapi jadi tidak terhubung ke data karyawan manapun."
+                : ""}{" "}
+              Tindakan ini tidak bisa dibatalkan.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Batal</AlertDialogCancel>
+            <AlertDialogAction onClick={handleDelete} disabled={deletingBusy}>
+              {deletingBusy ? "Menghapus…" : "Ya, Hapus"}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
@@ -592,7 +874,12 @@ function StaffAccountsTab({
           </div>
           <div>
             <Label>No. WhatsApp</Label>
-            <Input className="mt-2" value={form.whatsapp} disabled placeholder="Pilih karyawan dulu" />
+            <Input
+              className="mt-2"
+              value={form.whatsapp}
+              disabled
+              placeholder="Pilih karyawan dulu"
+            />
           </div>
           <div>
             <Label>Email (untuk lupa PIN)</Label>
@@ -601,13 +888,14 @@ function StaffAccountsTab({
         </div>
         {selectedEmployee && !selectedEmployee.phone && (
           <p className="mt-2 text-xs text-destructive">
-            Karyawan ini belum punya No. WhatsApp di Database Karyawan. Lengkapi dulu di tab "Database
-            Karyawan" sebelum membuat akun staff-nya.
+            Karyawan ini belum punya No. WhatsApp di Database Karyawan. Lengkapi dulu di tab
+            "Database Karyawan" sebelum membuat akun staff-nya.
           </p>
         )}
         <p className="mt-2 text-xs text-muted-foreground">
-          No. WhatsApp &amp; Email otomatis diambil dari data karyawan supaya selalu sama dengan yang
-          didaftarkan di "Database Karyawan". Untuk mengubahnya, edit dulu data karyawan di sana.
+          No. WhatsApp &amp; Email otomatis diambil dari data karyawan supaya selalu sama dengan
+          yang didaftarkan di "Database Karyawan". Untuk mengubahnya, edit dulu data karyawan di
+          sana.
         </p>
         <Button onClick={handleCreate} className="mt-5" disabled={submitting}>
           <KeyRound className="size-4" /> {submitting ? "Membuat…" : "Buatkan Akun Staff"}
