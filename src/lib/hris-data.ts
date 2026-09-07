@@ -278,19 +278,42 @@ export async function getAttendanceForEmployee(employeeId: string): Promise<Atte
   return (data as AttendanceRow[]).map(toAttendance);
 }
 
-export async function todayRecordFor(employeeId: string): Promise<AttendanceRecord | null> {
+/** All of today's sessions for one employee, oldest first — a field staff member can have several. */
+export async function getTodaySessionsFor(employeeId: string): Promise<AttendanceRecord[]> {
   const today = new Date().toISOString().slice(0, 10);
   const { data, error } = await supabase
     .from("hpm_attendance")
     .select(ATTENDANCE_COLUMNS)
     .eq("employee_id", employeeId)
     .eq("date", today)
+    .order("clock_in", { ascending: true });
+  if (error) throw error;
+  return (data as AttendanceRow[]).map(toAttendance);
+}
+
+/** The currently open session today (clocked in, not yet out), if any — at most one can be open at a time. */
+export async function getOpenSessionFor(employeeId: string): Promise<AttendanceRecord | null> {
+  const today = new Date().toISOString().slice(0, 10);
+  const { data, error } = await supabase
+    .from("hpm_attendance")
+    .select(ATTENDANCE_COLUMNS)
+    .eq("employee_id", employeeId)
+    .eq("date", today)
+    .is("clock_out", null)
+    .order("clock_in", { ascending: false })
+    .limit(1)
     .maybeSingle();
   if (error) throw error;
   return data ? toAttendance(data as AttendanceRow) : null;
 }
 
-/** Clock in with an optional GPS coordinate; marks LATE if after 09:00 local time. */
+/**
+ * Clock in with an optional GPS coordinate. Multiple sessions per day are
+ * allowed (field staff going out and back several times) — this only blocks
+ * a NEW clock-in while a session is still open (must clock out first).
+ * "LATE" is only ever applied to the day's first session; later same-day
+ * re-entries (after a client visit, etc) are just PRESENT.
+ */
 export async function clockIn(
   employeeId: string,
   input?: {
@@ -302,13 +325,16 @@ export async function clockIn(
     photoDataUrl?: string;
   },
 ): Promise<void> {
-  const existing = await todayRecordFor(employeeId);
-  if (existing) return;
+  const open = await getOpenSessionFor(employeeId);
+  if (open) return; // already clocked in — must clock out before clocking in again
 
+  const todaySessions = await getTodaySessionsFor(employeeId);
   const companyId = await getOrCreateCompanyId();
   const today = new Date().toISOString().slice(0, 10);
   const now = new Date();
-  const isLate = now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 0);
+  const isFirstSessionToday = todaySessions.length === 0;
+  const isLate =
+    isFirstSessionToday && (now.getHours() > 9 || (now.getHours() === 9 && now.getMinutes() > 0));
 
   const { error } = await supabase.from("hpm_attendance").insert({
     company_id: companyId,
@@ -334,7 +360,8 @@ export async function clockOut(employeeId: string): Promise<void> {
     .from("hpm_attendance")
     .update({ clock_out: new Date().toISOString() })
     .eq("employee_id", employeeId)
-    .eq("date", today);
+    .eq("date", today)
+    .is("clock_out", null);
   if (error) throw error;
 }
 
