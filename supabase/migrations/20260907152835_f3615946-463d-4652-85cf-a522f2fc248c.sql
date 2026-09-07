@@ -1,0 +1,1 @@
+ALTER TABLE public.hpm_admin_users ADD COLUMN IF NOT EXISTS position text;

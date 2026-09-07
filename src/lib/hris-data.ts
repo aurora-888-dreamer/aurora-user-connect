@@ -1013,13 +1013,31 @@ export async function clockIn(
   if (error) throw error;
 }
 
-export async function clockOut(employeeId: string, lateOutReason?: string): Promise<void> {
+export async function clockOut(
+  employeeId: string,
+  input?:
+    | string
+    | {
+        lateOutReason?: string;
+        coords?: { lat: string; long: string };
+        distanceMeters?: number;
+        isOutsideOffice?: boolean;
+        outsideLocationNote?: string;
+        outsideTaskStatus?: string;
+        photoDataUrl?: string;
+      },
+): Promise<void> {
+  const opts = typeof input === "string" ? { lateOutReason: input } : (input ?? {});
   const today = new Date().toISOString().slice(0, 10);
   const { error } = await supabase
     .from("hpm_attendance")
     .update({
       clock_out: new Date().toISOString(),
-      ...(lateOutReason ? { late_out_reason: lateOutReason } : {}),
+      ...(opts.lateOutReason ? { late_out_reason: opts.lateOutReason } : {}),
+      ...(opts.distanceMeters !== undefined ? { distance_meters: opts.distanceMeters } : {}),
+      ...(opts.isOutsideOffice !== undefined ? { is_outside_office: opts.isOutsideOffice } : {}),
+      ...(opts.outsideLocationNote ? { outside_location_note: opts.outsideLocationNote } : {}),
+      ...(opts.outsideTaskStatus ? { outside_task_status: opts.outsideTaskStatus } : {}),
     })
     .eq("employee_id", employeeId)
     .eq("date", today)

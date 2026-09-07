@@ -12,13 +12,19 @@ import { Route as rootRouteImport } from './routes/__root'
 import { Route as IndexRouteImport } from './routes/index'
 import { Route as AtsRouteImport } from './routes/ats'
 import { Route as DashboardRouteImport } from './routes/dashboard'
+import { Route as DevConsoleRouteImport } from './routes/dev-console'
 import { Route as DirectoryRouteImport } from './routes/directory'
+import { Route as FinanceRouteImport } from './routes/finance'
 import { Route as HrisRouteImport } from './routes/hris'
+import { Route as MenuAccessRouteImport } from './routes/menu-access'
 import { Route as SettingsRouteImport } from './routes/settings'
 import { Route as StaffIndexRouteImport } from './routes/staff/index'
 import { Route as StaffDashboardRouteImport } from './routes/staff/dashboard'
 import { Route as StaffForgotPinRouteImport } from './routes/staff/forgot-pin'
+import { Route as StaffHistoryRouteImport } from './routes/staff/history'
+import { Route as StaffInboxRouteImport } from './routes/staff/inbox'
 import { Route as StaffProfileRouteImport } from './routes/staff/profile'
+import { Route as StaffRequestRouteImport } from './routes/staff/request'
 import { Route as StaffSetupRouteImport } from './routes/staff/setup'
 
 const IndexRoute = IndexRouteImport.update({
@@ -36,14 +42,29 @@ const DashboardRoute = DashboardRouteImport.update({
   path: '/dashboard',
   getParentRoute: () => rootRouteImport,
 } as any)
+const DevConsoleRoute = DevConsoleRouteImport.update({
+  id: '/dev-console',
+  path: '/dev-console',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const DirectoryRoute = DirectoryRouteImport.update({
   id: '/directory',
   path: '/directory',
   getParentRoute: () => rootRouteImport,
 } as any)
+const FinanceRoute = FinanceRouteImport.update({
+  id: '/finance',
+  path: '/finance',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const HrisRoute = HrisRouteImport.update({
   id: '/hris',
   path: '/hris',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const MenuAccessRoute = MenuAccessRouteImport.update({
+  id: '/menu-access',
+  path: '/menu-access',
   getParentRoute: () => rootRouteImport,
 } as any)
 const SettingsRoute = SettingsRouteImport.update({
@@ -66,9 +87,24 @@ const StaffForgotPinRoute = StaffForgotPinRouteImport.update({
   path: '/staff/forgot-pin',
   getParentRoute: () => rootRouteImport,
 } as any)
+const StaffHistoryRoute = StaffHistoryRouteImport.update({
+  id: '/staff/history',
+  path: '/staff/history',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffInboxRoute = StaffInboxRouteImport.update({
+  id: '/staff/inbox',
+  path: '/staff/inbox',
+  getParentRoute: () => rootRouteImport,
+} as any)
 const StaffProfileRoute = StaffProfileRouteImport.update({
   id: '/staff/profile',
   path: '/staff/profile',
+  getParentRoute: () => rootRouteImport,
+} as any)
+const StaffRequestRoute = StaffRequestRouteImport.update({
+  id: '/staff/request',
+  path: '/staff/request',
   getParentRoute: () => rootRouteImport,
 } as any)
 const StaffSetupRoute = StaffSetupRouteImport.update({
@@ -81,12 +117,18 @@ export interface FileRoutesByFullPath {
   '/': typeof IndexRoute
   '/ats': typeof AtsRoute
   '/dashboard': typeof DashboardRoute
+  '/dev-console': typeof DevConsoleRoute
   '/directory': typeof DirectoryRoute
+  '/finance': typeof FinanceRoute
   '/hris': typeof HrisRoute
+  '/menu-access': typeof MenuAccessRoute
   '/settings': typeof SettingsRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/forgot-pin': typeof StaffForgotPinRoute
+  '/staff/history': typeof StaffHistoryRoute
+  '/staff/inbox': typeof StaffInboxRoute
   '/staff/profile': typeof StaffProfileRoute
+  '/staff/request': typeof StaffRequestRoute
   '/staff/setup': typeof StaffSetupRoute
   '/staff/': typeof StaffIndexRoute
 }
@@ -94,12 +136,18 @@ export interface FileRoutesByTo {
   '/': typeof IndexRoute
   '/ats': typeof AtsRoute
   '/dashboard': typeof DashboardRoute
+  '/dev-console': typeof DevConsoleRoute
   '/directory': typeof DirectoryRoute
+  '/finance': typeof FinanceRoute
   '/hris': typeof HrisRoute
+  '/menu-access': typeof MenuAccessRoute
   '/settings': typeof SettingsRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/forgot-pin': typeof StaffForgotPinRoute
+  '/staff/history': typeof StaffHistoryRoute
+  '/staff/inbox': typeof StaffInboxRoute
   '/staff/profile': typeof StaffProfileRoute
+  '/staff/request': typeof StaffRequestRoute
   '/staff/setup': typeof StaffSetupRoute
   '/staff': typeof StaffIndexRoute
 }
@@ -108,12 +156,18 @@ export interface FileRoutesById {
   '/': typeof IndexRoute
   '/ats': typeof AtsRoute
   '/dashboard': typeof DashboardRoute
+  '/dev-console': typeof DevConsoleRoute
   '/directory': typeof DirectoryRoute
+  '/finance': typeof FinanceRoute
   '/hris': typeof HrisRoute
+  '/menu-access': typeof MenuAccessRoute
   '/settings': typeof SettingsRoute
   '/staff/dashboard': typeof StaffDashboardRoute
   '/staff/forgot-pin': typeof StaffForgotPinRoute
+  '/staff/history': typeof StaffHistoryRoute
+  '/staff/inbox': typeof StaffInboxRoute
   '/staff/profile': typeof StaffProfileRoute
+  '/staff/request': typeof StaffRequestRoute
   '/staff/setup': typeof StaffSetupRoute
   '/staff/': typeof StaffIndexRoute
 }
@@ -123,12 +177,18 @@ export interface FileRouteTypes {
     | '/'
     | '/ats'
     | '/dashboard'
+    | '/dev-console'
     | '/directory'
+    | '/finance'
     | '/hris'
+    | '/menu-access'
     | '/settings'
     | '/staff/dashboard'
     | '/staff/forgot-pin'
+    | '/staff/history'
+    | '/staff/inbox'
     | '/staff/profile'
+    | '/staff/request'
     | '/staff/setup'
     | '/staff/'
   fileRoutesByTo: FileRoutesByTo
@@ -136,12 +196,18 @@ export interface FileRouteTypes {
     | '/'
     | '/ats'
     | '/dashboard'
+    | '/dev-console'
     | '/directory'
+    | '/finance'
     | '/hris'
+    | '/menu-access'
     | '/settings'
     | '/staff/dashboard'
     | '/staff/forgot-pin'
+    | '/staff/history'
+    | '/staff/inbox'
     | '/staff/profile'
+    | '/staff/request'
     | '/staff/setup'
     | '/staff'
   id:
@@ -149,12 +215,18 @@ export interface FileRouteTypes {
     | '/'
     | '/ats'
     | '/dashboard'
+    | '/dev-console'
     | '/directory'
+    | '/finance'
     | '/hris'
+    | '/menu-access'
     | '/settings'
     | '/staff/dashboard'
     | '/staff/forgot-pin'
+    | '/staff/history'
+    | '/staff/inbox'
     | '/staff/profile'
+    | '/staff/request'
     | '/staff/setup'
     | '/staff/'
   fileRoutesById: FileRoutesById
@@ -163,12 +235,18 @@ export interface RootRouteChildren {
   IndexRoute: typeof IndexRoute
   AtsRoute: typeof AtsRoute
   DashboardRoute: typeof DashboardRoute
+  DevConsoleRoute: typeof DevConsoleRoute
   DirectoryRoute: typeof DirectoryRoute
+  FinanceRoute: typeof FinanceRoute
   HrisRoute: typeof HrisRoute
+  MenuAccessRoute: typeof MenuAccessRoute
   SettingsRoute: typeof SettingsRoute
   StaffDashboardRoute: typeof StaffDashboardRoute
   StaffForgotPinRoute: typeof StaffForgotPinRoute
+  StaffHistoryRoute: typeof StaffHistoryRoute
+  StaffInboxRoute: typeof StaffInboxRoute
   StaffProfileRoute: typeof StaffProfileRoute
+  StaffRequestRoute: typeof StaffRequestRoute
   StaffSetupRoute: typeof StaffSetupRoute
   StaffIndexRoute: typeof StaffIndexRoute
 }
@@ -196,6 +274,13 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DashboardRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/dev-console': {
+      id: '/dev-console'
+      path: '/dev-console'
+      fullPath: '/dev-console'
+      preLoaderRoute: typeof DevConsoleRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/directory': {
       id: '/directory'
       path: '/directory'
@@ -203,11 +288,25 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof DirectoryRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/finance': {
+      id: '/finance'
+      path: '/finance'
+      fullPath: '/finance'
+      preLoaderRoute: typeof FinanceRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/hris': {
       id: '/hris'
       path: '/hris'
       fullPath: '/hris'
       preLoaderRoute: typeof HrisRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/menu-access': {
+      id: '/menu-access'
+      path: '/menu-access'
+      fullPath: '/menu-access'
+      preLoaderRoute: typeof MenuAccessRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/settings': {
@@ -238,11 +337,32 @@ declare module '@tanstack/react-router' {
       preLoaderRoute: typeof StaffForgotPinRouteImport
       parentRoute: typeof rootRouteImport
     }
+    '/staff/history': {
+      id: '/staff/history'
+      path: '/staff/history'
+      fullPath: '/staff/history'
+      preLoaderRoute: typeof StaffHistoryRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff/inbox': {
+      id: '/staff/inbox'
+      path: '/staff/inbox'
+      fullPath: '/staff/inbox'
+      preLoaderRoute: typeof StaffInboxRouteImport
+      parentRoute: typeof rootRouteImport
+    }
     '/staff/profile': {
       id: '/staff/profile'
       path: '/staff/profile'
       fullPath: '/staff/profile'
       preLoaderRoute: typeof StaffProfileRouteImport
+      parentRoute: typeof rootRouteImport
+    }
+    '/staff/request': {
+      id: '/staff/request'
+      path: '/staff/request'
+      fullPath: '/staff/request'
+      preLoaderRoute: typeof StaffRequestRouteImport
       parentRoute: typeof rootRouteImport
     }
     '/staff/setup': {
@@ -259,12 +379,18 @@ const rootRouteChildren: RootRouteChildren = {
   IndexRoute: IndexRoute,
   AtsRoute: AtsRoute,
   DashboardRoute: DashboardRoute,
+  DevConsoleRoute: DevConsoleRoute,
   DirectoryRoute: DirectoryRoute,
+  FinanceRoute: FinanceRoute,
   HrisRoute: HrisRoute,
+  MenuAccessRoute: MenuAccessRoute,
   SettingsRoute: SettingsRoute,
   StaffDashboardRoute: StaffDashboardRoute,
   StaffForgotPinRoute: StaffForgotPinRoute,
+  StaffHistoryRoute: StaffHistoryRoute,
+  StaffInboxRoute: StaffInboxRoute,
   StaffProfileRoute: StaffProfileRoute,
+  StaffRequestRoute: StaffRequestRoute,
   StaffSetupRoute: StaffSetupRoute,
   StaffIndexRoute: StaffIndexRoute,
 }
