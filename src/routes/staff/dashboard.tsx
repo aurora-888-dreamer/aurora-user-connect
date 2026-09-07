@@ -1,11 +1,13 @@
 import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
 import { useEffect, useState } from "react";
-import { LogOut, Megaphone, Clock3 } from "lucide-react";
+import { LogOut, Megaphone, Clock3, Bell } from "lucide-react";
+import { Badge } from "@/components/ui/badge";
 import { AttendanceFlow } from "@/components/AttendanceFlow";
 import { StaffTabBar } from "@/components/StaffTabBar";
 import { getEmployeeById, type Employee } from "@/lib/hris-data";
 import { getCompanyProfile, type CompanyProfile } from "@/lib/company-data";
 import { getAnnouncements, type Announcement } from "@/lib/announcements-data";
+import { getMyLeaveRequests, type LeaveRequest } from "@/lib/leave-data";
 import {
   getStaffSession,
   setStaffSession,
@@ -26,6 +28,7 @@ function StaffDashboardPage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [company, setCompany] = useState<CompanyProfile | null>(null);
   const [announcements, setAnnouncements] = useState<Announcement[]>([]);
+  const [myRequests, setMyRequests] = useState<LeaveRequest[]>([]);
   const [refreshKey, setRefreshKey] = useState(0);
 
   useEffect(() => {
@@ -52,6 +55,13 @@ function StaffDashboardPage() {
       .then((rows) => setAnnouncements(rows.slice(0, 2)))
       .catch(() => setAnnouncements([]));
   }, [navigate]);
+
+  useEffect(() => {
+    if (!account) return;
+    getMyLeaveRequests(account.employeeId)
+      .then((rows) => setMyRequests(rows.slice(0, 3)))
+      .catch(() => setMyRequests([]));
+  }, [account]);
 
   useEffect(() => {
     if (!account) return;
@@ -98,6 +108,7 @@ function StaffDashboardPage() {
           <div className="mt-4">
             <AttendanceFlow
               employee={employee}
+              compact
               onChange={async () => {
                 const fresh = await refreshStaffSession();
                 if (fresh) setAccount(fresh);
@@ -125,6 +136,45 @@ function StaffDashboardPage() {
             </Link>
           </section>
         )}
+
+        <section className="glass-panel p-5">
+          <h2 className="flex items-center gap-2 text-base font-semibold">
+            <Bell className="size-4 text-primary" /> Pengajuan Saya
+          </h2>
+          {myRequests.length === 0 ? (
+            <p className="mt-2 text-sm text-muted-foreground">Belum ada pengajuan.</p>
+          ) : (
+            <ul className="mt-3 space-y-3">
+              {myRequests.map((r) => (
+                <li
+                  key={r.id}
+                  className="flex items-center justify-between rounded-lg border border-border p-3"
+                >
+                  <div>
+                    <p className="text-sm font-medium">Cuti/Izin — {r.reasonCategory}</p>
+                    <p className="text-xs text-muted-foreground">
+                      {r.startDate} s/d {r.endDate}
+                    </p>
+                  </div>
+                  <Badge
+                    variant={
+                      r.status === "APPROVED"
+                        ? "default"
+                        : r.status === "REJECTED"
+                          ? "destructive"
+                          : "secondary"
+                    }
+                  >
+                    {r.status}
+                  </Badge>
+                </li>
+              ))}
+            </ul>
+          )}
+          <Link to="/staff/request" className="mt-3 block text-center text-xs text-primary">
+            Ajukan Baru
+          </Link>
+        </section>
       </main>
 
       <StaffTabBar />
