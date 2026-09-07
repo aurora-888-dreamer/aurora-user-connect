@@ -504,6 +504,19 @@ function StaffAccountsTab({
   const assignedEmployeeIds = new Set(accounts.map((a) => a.employeeId));
   const availableEmployees = employees.filter((e) => !assignedEmployeeIds.has(e.id));
 
+  const selectedEmployee = employees.find((e) => e.id === form.employeeId) ?? null;
+
+  // WA & Email selalu ikut data karyawan yang didaftarkan di "Database Karyawan" —
+  // supaya tidak ada dua sumber data yang bisa beda-beda (lihat handleEmployeeSelect).
+  const handleEmployeeSelect = (employeeId: string) => {
+    const employee = employees.find((e) => e.id === employeeId);
+    setForm({
+      employeeId,
+      whatsapp: employee?.phone ?? "",
+      email: employee?.email ?? "",
+    });
+  };
+
   const handleCreate = async () => {
     const employee = employees.find((e) => e.id === form.employeeId);
     if (!employee) {
@@ -511,7 +524,9 @@ function StaffAccountsTab({
       return;
     }
     if (!form.whatsapp.trim()) {
-      toast.error("Nomor WhatsApp wajib diisi (dipakai untuk verifikasi OTP saat login pertama).");
+      toast.error(
+        "No. WhatsApp karyawan ini belum diisi di Database Karyawan. Lengkapi dulu di sana (dipakai untuk verifikasi OTP saat login pertama).",
+      );
       return;
     }
     setSubmitting(true);
@@ -562,10 +577,7 @@ function StaffAccountsTab({
         <div className="mt-4 grid gap-4 sm:grid-cols-3">
           <div>
             <Label>Karyawan</Label>
-            <Select
-              value={form.employeeId}
-              onValueChange={(v) => setForm({ ...form, employeeId: v })}
-            >
+            <Select value={form.employeeId} onValueChange={handleEmployeeSelect}>
               <SelectTrigger className="mt-2">
                 <SelectValue placeholder="Pilih karyawan" />
               </SelectTrigger>
@@ -580,22 +592,23 @@ function StaffAccountsTab({
           </div>
           <div>
             <Label>No. WhatsApp</Label>
-            <Input
-              className="mt-2"
-              value={form.whatsapp}
-              onChange={(e) => setForm({ ...form, whatsapp: e.target.value })}
-              placeholder="08211307710"
-            />
+            <Input className="mt-2" value={form.whatsapp} disabled placeholder="Pilih karyawan dulu" />
           </div>
           <div>
             <Label>Email (untuk lupa PIN)</Label>
-            <Input
-              className="mt-2"
-              value={form.email}
-              onChange={(e) => setForm({ ...form, email: e.target.value })}
-            />
+            <Input className="mt-2" value={form.email} disabled placeholder="Pilih karyawan dulu" />
           </div>
         </div>
+        {selectedEmployee && !selectedEmployee.phone && (
+          <p className="mt-2 text-xs text-destructive">
+            Karyawan ini belum punya No. WhatsApp di Database Karyawan. Lengkapi dulu di tab "Database
+            Karyawan" sebelum membuat akun staff-nya.
+          </p>
+        )}
+        <p className="mt-2 text-xs text-muted-foreground">
+          No. WhatsApp &amp; Email otomatis diambil dari data karyawan supaya selalu sama dengan yang
+          didaftarkan di "Database Karyawan". Untuk mengubahnya, edit dulu data karyawan di sana.
+        </p>
         <Button onClick={handleCreate} className="mt-5" disabled={submitting}>
           <KeyRound className="size-4" /> {submitting ? "Membuat…" : "Buatkan Akun Staff"}
         </Button>
