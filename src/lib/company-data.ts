@@ -25,6 +25,11 @@ export type CompanyProfile = {
   /** "HH:MM" 24-hour, e.g. "09:00" — used to detect late clock-in/out. */
   workStartTime: string;
   workEndTime: string;
+  /** Day of month (1-28) the payroll period cuts over on, e.g. 20 = periods run 20th-to-20th. */
+  payrollCutoffDay: number;
+  /** Pension payout formula at retirement (age 55): (pensionYearsMultiplier × years of service + pensionConstant) × basic salary. Default matches the common government-standard "2n+1". */
+  pensionYearsMultiplier: number;
+  pensionConstant: number;
 };
 
 const DEFAULT_COMPANY: CompanyProfile = {
@@ -39,6 +44,9 @@ const DEFAULT_COMPANY: CompanyProfile = {
   officeRadiusMeters: 30,
   workStartTime: "09:00",
   workEndTime: "17:00",
+  payrollCutoffDay: 1,
+  pensionYearsMultiplier: 2,
+  pensionConstant: 1,
 };
 
 /** Fallback used only if a read/write happens before the office radius has ever been set. */
@@ -85,7 +93,7 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
   const { data, error } = await supabase
     .from("hpm_companies")
     .select(
-      "name, address, phone, whatsapp, email, website, office_lat, office_lng, office_radius_meters, work_start_time, work_end_time",
+      "name, address, phone, whatsapp, email, website, office_lat, office_lng, office_radius_meters, work_start_time, work_end_time, payroll_cutoff_day, pension_years_multiplier, pension_constant",
     )
     .eq("id", companyId)
     .single();
@@ -104,6 +112,9 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
     officeRadiusMeters: data.office_radius_meters ?? DEFAULT_OFFICE_RADIUS_METERS,
     workStartTime: (data.work_start_time ?? "09:00").slice(0, 5),
     workEndTime: (data.work_end_time ?? "17:00").slice(0, 5),
+    payrollCutoffDay: data.payroll_cutoff_day ?? 1,
+    pensionYearsMultiplier: data.pension_years_multiplier ?? 2,
+    pensionConstant: data.pension_constant ?? 1,
   };
 }
 
@@ -123,6 +134,9 @@ export async function saveCompanyProfile(profile: CompanyProfile): Promise<void>
       office_radius_meters: profile.officeRadiusMeters,
       work_start_time: profile.workStartTime,
       work_end_time: profile.workEndTime,
+      payroll_cutoff_day: profile.payrollCutoffDay,
+      pension_years_multiplier: profile.pensionYearsMultiplier,
+      pension_constant: profile.pensionConstant,
     })
     .eq("id", companyId);
 
@@ -156,4 +170,47 @@ export function distanceMeters(lat1: number, lng1: number, lat2: number, lng2: n
     Math.cos(toRad(lat1)) * Math.cos(toRad(lat2)) * Math.sin(dLng / 2) ** 2;
   const c = 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
   return R * c;
+}
+
+export type PayrollPeriod = { start: string; end: string; label: string };
+
+/**
+ * The payroll period (inclusive start/end, "YYYY-MM-DD") containing
+ * `referenceDate`, given a cutoff day (e.g. cutoffDay=20 → periods run the
+ * 20th of one month through the 19th of the next). cutoffDay=1 means a
+ * plain calendar month. Used by HRIS's Laporan Akhir and Finance payroll so
+ * both compute the exact same date range.
+ */
+export function getPayrollPeriod(cutoffDay: number, referenceDate = new Date()): PayrollPeriod {
+  const day = referenceDate.getDate();
+  const year = referenceDate.getFullYear();
+  const month = referenceDate.getMonth();
+
+  // If we're before this month's cutoff day, the current period started LAST month.
+  const startMonthOffset = day < cutoffDay ? -1 : 0;
+  const start = new Date(year, month + startMonthOffset, cutoffDay);
+  const end = new Date(year, month + startMonthOffset + 1, cutoffDay - 1);
+
+  const fmt = (d: Date) => d.toISOString().slice(0, 10);
+  const monthLabel = (d: Date) =>
+    d.toLocaleDateString("id-ID", { month: "short", year: "numeric" });
+  return {
+    start: fmt(start),
+    end: fmt(end),
+    label:
+      cutoffDay === 1
+        ? monthLabel(start)
+        : `${start.getDate()} ${monthLabel(start)} – ${end.getDate()} ${monthLabel(end)}`,
+  };
+}
+
+/** The previous full period before the one containing `referenceDate` — usually what a "final report" covers, since the current period isn't finished yet. */
+export function getPreviousPayrollPeriod(
+  cutoffDay: number,
+  referenceDate = new Date(),
+): PayrollPeriod {
+  const current = getPayrollPeriod(cutoffDay, referenceDate);
+  const dayBeforeCurrentStart = new Date(current.start);
+  dayBeforeCurrentStart.setDate(dayBeforeCurrentStart.getDate() - 1);
+  return getPayrollPeriod(cutoffDay, dayBeforeCurrentStart);
 }

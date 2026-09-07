@@ -75,6 +75,7 @@ export type Employee = {
   rank: string;
   positionLevel: PositionLevel;
   bloodType?: BloodType;
+  dateOfBirth?: string;
   locationId?: string;
   shiftTypeId?: string;
   employmentStatus: EmploymentStatus;
@@ -91,7 +92,7 @@ export type Employee = {
   healthAllowance?: number;
   insuranceAllowance?: number;
   overtimeRatePerHour?: number;
-  pensionContribution?: number;
+  jhtDeduction?: number;
   performanceBonus?: number;
   isActive: boolean;
   source?: "MANUAL" | "ATS_HANDOVER" | undefined;
@@ -130,6 +131,7 @@ export type Payroll = {
   overtimePay: number;
   bpjsHealthEmp: number;
   bpjsTkEmp: number;
+  jhtDeduction: number;
   pph21Amount: number;
   netSalary: number;
   paymentStatus: PayrollStatus;
@@ -161,6 +163,7 @@ type EmployeeRow = {
   rank: string | null;
   position_level: string;
   blood_type: string | null;
+  date_of_birth: string | null;
   location_id: string | null;
   shift_type_id: string | null;
   employment_status: string;
@@ -181,7 +184,7 @@ type EmployeeRow = {
   health_allowance: number;
   insurance_allowance: number;
   overtime_rate_per_hour: number;
-  pension_contribution: number;
+  jht_deduction: number;
   performance_bonus: number;
   created_at: string;
 };
@@ -200,6 +203,7 @@ function toEmployee(row: EmployeeRow): Employee {
     ...(row.blood_type && row.blood_type !== "Tidak Diketahui"
       ? { bloodType: row.blood_type as BloodType }
       : {}),
+    ...(row.date_of_birth ? { dateOfBirth: row.date_of_birth } : {}),
     ...(row.location_id ? { locationId: row.location_id } : {}),
     ...(row.shift_type_id ? { shiftTypeId: row.shift_type_id } : {}),
     employmentStatus: (row.employment_status as EmploymentStatus) ?? "PKWT",
@@ -216,7 +220,7 @@ function toEmployee(row: EmployeeRow): Employee {
     healthAllowance: row.health_allowance ?? 0,
     insuranceAllowance: row.insurance_allowance ?? 0,
     overtimeRatePerHour: row.overtime_rate_per_hour ?? 0,
-    pensionContribution: row.pension_contribution ?? 0,
+    jhtDeduction: row.jht_deduction ?? 0,
     performanceBonus: row.performance_bonus ?? 0,
     isActive: row.is_active,
     source: (row.source as Employee["source"]) ?? "MANUAL",
@@ -230,7 +234,7 @@ function toEmployee(row: EmployeeRow): Employee {
 }
 
 const EMPLOYEE_COLUMNS =
-  "id, nik, full_name, email, phone, department, position, rank, position_level, blood_type, location_id, shift_type_id, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, pension_contribution, performance_bonus, created_at";
+  "id, nik, full_name, email, phone, department, position, rank, position_level, blood_type, date_of_birth, location_id, shift_type_id, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, jht_deduction, performance_bonus, created_at";
 
 export async function getEmployees(): Promise<Employee[]> {
   const companyId = await getOrCreateCompanyId();
@@ -293,6 +297,7 @@ export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Pr
       rank: input.rank || null,
       position_level: input.positionLevel || "Staff",
       blood_type: input.bloodType || null,
+      date_of_birth: input.dateOfBirth || null,
       location_id: input.locationId || null,
       shift_type_id: input.shiftTypeId || null,
       employment_status: input.employmentStatus,
@@ -313,7 +318,7 @@ export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Pr
       health_allowance: input.healthAllowance || 0,
       insurance_allowance: input.insuranceAllowance || 0,
       overtime_rate_per_hour: input.overtimeRatePerHour || 0,
-      pension_contribution: input.pensionContribution || 0,
+      jht_deduction: input.jhtDeduction || 0,
       performance_bonus: input.performanceBonus || 0,
     })
     .select(EMPLOYEE_COLUMNS)
@@ -333,6 +338,7 @@ export async function updateEmployee(id: string, patch: Partial<Employee>): Prom
   if (patch.rank !== undefined) dbPatch.rank = patch.rank;
   if (patch.positionLevel !== undefined) dbPatch.position_level = patch.positionLevel;
   if (patch.bloodType !== undefined) dbPatch.blood_type = patch.bloodType || null;
+  if (patch.dateOfBirth !== undefined) dbPatch.date_of_birth = patch.dateOfBirth || null;
   if (patch.locationId !== undefined) dbPatch.location_id = patch.locationId || null;
   if (patch.shiftTypeId !== undefined) dbPatch.shift_type_id = patch.shiftTypeId || null;
   if (patch.employmentStatus !== undefined) dbPatch.employment_status = patch.employmentStatus;
@@ -356,8 +362,7 @@ export async function updateEmployee(id: string, patch: Partial<Employee>): Prom
     dbPatch.insurance_allowance = patch.insuranceAllowance;
   if (patch.overtimeRatePerHour !== undefined)
     dbPatch.overtime_rate_per_hour = patch.overtimeRatePerHour;
-  if (patch.pensionContribution !== undefined)
-    dbPatch.pension_contribution = patch.pensionContribution;
+  if (patch.jhtDeduction !== undefined) dbPatch.jht_deduction = patch.jhtDeduction;
   if (patch.performanceBonus !== undefined) dbPatch.performance_bonus = patch.performanceBonus;
   // Note: patch.faceDescriptor is intentionally ignored here — FaceID is
   // written to hpm_staff_users via staff-auth.ts's updateStaffAccount, not here.
@@ -827,6 +832,91 @@ export async function getAttendanceForEmployee(employeeId: string): Promise<Atte
   return (data as AttendanceRow[]).map(toAttendance);
 }
 
+async function getAttendanceForEmployeeInRange(
+  employeeId: string,
+  startDate: string,
+  endDate: string,
+): Promise<AttendanceRecord[]> {
+  const { data, error } = await supabase
+    .from("hpm_attendance")
+    .select(ATTENDANCE_COLUMNS)
+    .eq("employee_id", employeeId)
+    .gte("date", startDate)
+    .lte("date", endDate)
+    .order("date", { ascending: true });
+  if (error) throw error;
+  return (data as AttendanceRow[]).map(toAttendance);
+}
+
+/** Standard scheduled hours for a shift, handling shifts that cross midnight (end time earlier than start time). */
+function shiftStandardHours(shift: ShiftType): number {
+  const [sh, sm] = shift.startTime.split(":").map(Number);
+  const [eh, em] = shift.endTime.split(":").map(Number);
+  let minutes = (eh ?? 0) * 60 + (em ?? 0) - ((sh ?? 0) * 60 + (sm ?? 0));
+  if (minutes <= 0) minutes += 24 * 60;
+  return minutes / 60;
+}
+
+export type AttendanceSummary = {
+  employeeId: string;
+  presentDays: number;
+  totalOvertimeHours: number;
+};
+
+/**
+ * Attendance days + overtime hours for one employee over a period — the raw
+ * numbers Finance's payroll needs (tunjangan makan × hari hadir, lembur ×
+ * jam), instead of manually-typed flat amounts.
+ *
+ * Overtime = hours worked beyond the employee's shift's standard daily
+ * hours; on a day their shift isn't scheduled at all, every hour worked
+ * counts as overtime.
+ */
+export async function computeAttendanceSummary(
+  employee: Employee,
+  startDate: string,
+  endDate: string,
+): Promise<AttendanceSummary> {
+  const [records, shift] = await Promise.all([
+    getAttendanceForEmployeeInRange(employee.id, startDate, endDate),
+    resolveEffectiveShift(employee),
+  ]);
+
+  const standardHours = shiftStandardHours(shift);
+  const byDate = new Map<string, AttendanceRecord[]>();
+  for (const r of records) {
+    const list = byDate.get(r.date) ?? [];
+    list.push(r);
+    byDate.set(r.date, list);
+  }
+
+  let totalOvertimeHours = 0;
+  for (const [dateStr, sessions] of byDate) {
+    const hoursWorked = sessions.reduce((sum, s) => {
+      if (!s.clockIn || !s.clockOut) return sum;
+      return sum + (new Date(s.clockOut).getTime() - new Date(s.clockIn).getTime()) / 3_600_000;
+    }, 0);
+    // Noon avoids any midnight/timezone boundary shifting the weekday by a day.
+    const scheduledToday = isShiftActiveOn(shift, new Date(`${dateStr}T12:00:00`));
+    totalOvertimeHours += scheduledToday ? Math.max(0, hoursWorked - standardHours) : hoursWorked;
+  }
+
+  return {
+    employeeId: employee.id,
+    presentDays: byDate.size,
+    totalOvertimeHours: Math.round(totalOvertimeHours * 100) / 100,
+  };
+}
+
+/** Same as computeAttendanceSummary but for every employee at once — powers HRIS's Laporan Akhir and Finance's payroll compile. */
+export async function computeAttendanceSummaryForAll(
+  startDate: string,
+  endDate: string,
+): Promise<AttendanceSummary[]> {
+  const employees = await getEmployees();
+  return Promise.all(employees.map((e) => computeAttendanceSummary(e, startDate, endDate)));
+}
+
 /** All of today's sessions for one employee, oldest first — a field staff member can have several. */
 export async function getTodaySessionsFor(employeeId: string): Promise<AttendanceRecord[]> {
   const today = new Date().toISOString().slice(0, 10);
@@ -985,14 +1075,33 @@ function terRate(category: "A" | "B" | "C", bruto: number): number {
 const BPJS_HEALTH_CAP = 12_000_000;
 const BPJS_JP_CAP = 10_547_400;
 
+/**
+ * Builds one payroll line from an employee's stored rates + the real
+ * attendance numbers for the period (from computeAttendanceSummary) —
+ * tunjangan makan × hari hadir, lembur × jam, not manually typed amounts.
+ * Transport/Jabatan/Kesehatan/Asuransi stay flat monthly. JHT is deducted
+ * from the net salary (it's a BPJS Ketenagakerjaan deduction, not a
+ * separate monthly allowance) — the once-off pension payout at age 55 is a
+ * different calculation (see computePensionPayout).
+ */
 export function computePayroll(input: {
   employee: Employee;
   period: string;
-  allowances: number;
-  overtimePay: number;
+  presentDays: number;
+  overtimeHours: number;
 }): Omit<Payroll, "id" | "createdAt"> {
-  const { employee, period, allowances, overtimePay } = input;
+  const { employee, period, presentDays, overtimeHours } = input;
   const basicSalary = employee.basicSalary ?? 0;
+  const overtimePay = Math.round((employee.overtimeRatePerHour ?? 0) * overtimeHours);
+  const allowances = Math.round(
+    (employee.transportAllowance ?? 0) +
+      (employee.positionAllowance ?? 0) +
+      (employee.healthAllowance ?? 0) +
+      (employee.insuranceAllowance ?? 0) +
+      (employee.mealAllowance ?? 0) * presentDays,
+  );
+  const jhtDeduction = employee.jhtDeduction ?? 0;
+
   const bruto = basicSalary + allowances + overtimePay;
   const category = TER_CATEGORY[employee.ptkpStatus];
   const rate = terRate(category, bruto);
@@ -1003,7 +1112,7 @@ export function computePayroll(input: {
   const jpBasis = Math.min(basicSalary, BPJS_JP_CAP);
   const bpjsTkEmp = Math.round(basicSalary * 0.02 + jpBasis * 0.01);
 
-  const netSalary = bruto - pph21Amount - bpjsHealthEmp - bpjsTkEmp;
+  const netSalary = bruto - pph21Amount - bpjsHealthEmp - bpjsTkEmp - jhtDeduction;
 
   return {
     employeeId: employee.id,
@@ -1013,10 +1122,48 @@ export function computePayroll(input: {
     overtimePay,
     bpjsHealthEmp,
     bpjsTkEmp,
+    jhtDeduction,
     pph21Amount,
     netSalary,
     paymentStatus: "DRAFT",
   };
+}
+
+/**
+ * One-time retirement payout at age 55 — default government-standard
+ * formula (pensionYearsMultiplier × years-of-service + pensionConstant) ×
+ * basic salary, e.g. the common "2n+1". Both numbers are configurable in
+ * Pengaturan. Returns null if the employee has no date of birth on file.
+ */
+export function computePensionPayout(
+  employee: Employee,
+  formula: { pensionYearsMultiplier: number; pensionConstant: number },
+  asOfDate = new Date(),
+): { age: number; yearsOfService: number; payout: number } | null {
+  if (!employee.dateOfBirth) return null;
+  const birth = new Date(employee.dateOfBirth);
+  const age =
+    asOfDate.getFullYear() -
+    birth.getFullYear() -
+    (asOfDate.getMonth() < birth.getMonth() ||
+    (asOfDate.getMonth() === birth.getMonth() && asOfDate.getDate() < birth.getDate())
+      ? 1
+      : 0);
+  const joined = employee.joinDate ? new Date(employee.joinDate) : asOfDate;
+  const yearsOfService = Math.max(
+    0,
+    asOfDate.getFullYear() -
+      joined.getFullYear() -
+      (asOfDate.getMonth() < joined.getMonth() ||
+      (asOfDate.getMonth() === joined.getMonth() && asOfDate.getDate() < joined.getDate())
+        ? 1
+        : 0),
+  );
+  const payout = Math.round(
+    (formula.pensionYearsMultiplier * yearsOfService + formula.pensionConstant) *
+      (employee.basicSalary ?? 0),
+  );
+  return { age, yearsOfService, payout };
 }
 
 export function getPayrolls(): Payroll[] {
