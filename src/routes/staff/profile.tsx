@@ -8,6 +8,7 @@ import {
   Lock,
   ScanFace,
   IdCard,
+  Landmark,
   Upload,
   Loader2,
   CheckCircle2,
@@ -24,7 +25,7 @@ import {
 } from "@/lib/staff-auth";
 import { FaceCaptureDialog } from "@/components/FaceCaptureDialog";
 import { StaffTabBar } from "@/components/StaffTabBar";
-import { getEmployeeById } from "@/lib/hris-data";
+import { getEmployeeById, updateEmployee } from "@/lib/hris-data";
 import { readKtpPhoto, niksMatch } from "@/lib/ktp-ocr";
 
 export const Route = createFileRoute("/staff/profile")({
@@ -40,6 +41,11 @@ function StaffProfilePage() {
   const [email, setEmail] = useState("");
   const [saving, setSaving] = useState(false);
   const [showFaceDialog, setShowFaceDialog] = useState(false);
+
+  const [bankName, setBankName] = useState("");
+  const [bankAccountNumber, setBankAccountNumber] = useState("");
+  const [bankAccountHolder, setBankAccountHolder] = useState("");
+  const [savingBank, setSavingBank] = useState(false);
 
   const [ktpFileUrl, setKtpFileUrl] = useState<string | null>(null);
   const [ktpBusy, setKtpBusy] = useState(false);
@@ -64,6 +70,19 @@ function StaffProfilePage() {
     setAccount(session);
     setEmail(session.email);
     setKtpFileUrl(session.ktpPhoto ?? null);
+    if (session.employeeId) {
+      getEmployeeById(session.employeeId)
+        .then((emp) => {
+          if (emp) {
+            setBankName(emp.bankName ?? "");
+            setBankAccountNumber(emp.bankAccountNumber ?? "");
+            setBankAccountHolder(emp.bankAccountHolder ?? "");
+          }
+        })
+        .catch(() => {
+          /* keep fields blank if this fails — not critical for page load */
+        });
+    }
   }, [navigate]);
 
   if (!account) return null;
@@ -77,6 +96,23 @@ function StaffProfilePage() {
       toast.error("Gagal menyimpan. Coba lagi.");
     } finally {
       setSaving(false);
+    }
+  };
+
+  const handleSaveBank = async () => {
+    if (!account.employeeId) return;
+    setSavingBank(true);
+    try {
+      await updateEmployee(account.employeeId, {
+        bankName: bankName.trim(),
+        bankAccountNumber: bankAccountNumber.trim(),
+        bankAccountHolder: bankAccountHolder.trim(),
+      });
+      toast.success("Data rekening disimpan.");
+    } catch {
+      toast.error("Gagal menyimpan data rekening. Coba lagi.");
+    } finally {
+      setSavingBank(false);
     }
   };
 
@@ -204,6 +240,44 @@ function StaffProfilePage() {
 
         <Button className="w-full" onClick={handleSave} disabled={saving}>
           {saving ? "Menyimpan…" : "Simpan"}
+        </Button>
+      </div>
+
+      {/* ---------- Data Rekening Bank — untuk pembayaran gaji ---------- */}
+      <div className="glass-panel mx-auto mt-4 max-w-md space-y-4 p-6">
+        <h2 className="flex items-center gap-2 text-base font-semibold">
+          <Landmark className="size-5 text-primary" /> Data Rekening Bank
+        </h2>
+        <p className="text-xs text-muted-foreground">
+          Dipakai Finance untuk pembayaran gaji. Pastikan nama pemilik rekening sesuai KTP.
+        </p>
+        <div>
+          <Label>Nama Bank</Label>
+          <Input
+            className="mt-2"
+            value={bankName}
+            onChange={(e) => setBankName(e.target.value)}
+            placeholder="BCA"
+          />
+        </div>
+        <div>
+          <Label>Nomor Rekening</Label>
+          <Input
+            className="mt-2"
+            value={bankAccountNumber}
+            onChange={(e) => setBankAccountNumber(e.target.value)}
+          />
+        </div>
+        <div>
+          <Label>Atas Nama</Label>
+          <Input
+            className="mt-2"
+            value={bankAccountHolder}
+            onChange={(e) => setBankAccountHolder(e.target.value)}
+          />
+        </div>
+        <Button className="w-full" variant="outline" onClick={handleSaveBank} disabled={savingBank}>
+          {savingBank ? "Menyimpan…" : "Simpan Rekening"}
         </Button>
       </div>
 
