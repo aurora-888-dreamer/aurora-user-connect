@@ -295,6 +295,42 @@ export type Database = {
         };
         Relationships: [];
       };
+      hpm_contacts: {
+        Row: {
+          id: string;
+          company_id: string;
+          admin_id: string;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          admin_id: string;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          admin_id?: string;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hpm_contacts_company_id_fkey";
+            columns: ["company_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_companies";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "hpm_contacts_admin_id_fkey";
+            columns: ["admin_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_admin_users";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
       hpm_employees: {
         Row: {
           basic_salary: number;
