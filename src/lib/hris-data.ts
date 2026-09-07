@@ -471,6 +471,8 @@ export type WorkLocation = {
   name: string;
   type: LocationType;
   address: string;
+  phone: string;
+  parentLocationId?: string;
   lat: number | null;
   lng: number | null;
   radiusMeters: number;
@@ -481,6 +483,8 @@ type LocationRow = {
   name: string;
   type: string;
   address: string | null;
+  phone: string | null;
+  parent_location_id: string | null;
   lat: number | null;
   lng: number | null;
   radius_meters: number;
@@ -492,6 +496,8 @@ function toLocation(row: LocationRow): WorkLocation {
     name: row.name,
     type: row.type as LocationType,
     address: row.address ?? "",
+    phone: row.phone ?? "",
+    ...(row.parent_location_id ? { parentLocationId: row.parent_location_id } : {}),
     lat: row.lat,
     lng: row.lng,
     radiusMeters: row.radius_meters,
@@ -502,7 +508,7 @@ export async function getLocations(): Promise<WorkLocation[]> {
   const companyId = await getOrCreateCompanyId();
   const { data, error } = await supabase
     .from("hpm_locations")
-    .select("id, name, type, address, lat, lng, radius_meters")
+    .select("id, name, type, address, phone, parent_location_id, lat, lng, radius_meters")
     .eq("company_id", companyId)
     .order("name", { ascending: true });
   if (error) throw error;
@@ -518,11 +524,13 @@ export async function addLocation(input: Omit<WorkLocation, "id">): Promise<Work
       name: input.name,
       type: input.type,
       address: input.address || null,
+      phone: input.phone || null,
+      parent_location_id: input.parentLocationId || null,
       lat: input.lat,
       lng: input.lng,
       radius_meters: input.radiusMeters,
     })
-    .select("id, name, type, address, lat, lng, radius_meters")
+    .select("id, name, type, address, phone, parent_location_id, lat, lng, radius_meters")
     .single();
   if (error) throw error;
   return toLocation(data as LocationRow);
@@ -536,6 +544,9 @@ export async function updateLocation(
   if (patch.name !== undefined) dbPatch.name = patch.name;
   if (patch.type !== undefined) dbPatch.type = patch.type;
   if (patch.address !== undefined) dbPatch.address = patch.address;
+  if (patch.phone !== undefined) dbPatch.phone = patch.phone;
+  if (patch.parentLocationId !== undefined)
+    dbPatch.parent_location_id = patch.parentLocationId || null;
   if (patch.lat !== undefined) dbPatch.lat = patch.lat;
   if (patch.lng !== undefined) dbPatch.lng = patch.lng;
   if (patch.radiusMeters !== undefined) dbPatch.radius_meters = patch.radiusMeters;
