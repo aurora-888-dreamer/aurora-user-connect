@@ -23,8 +23,15 @@ import {
   TableHeader,
   TableRow,
 } from "@/components/ui/table";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import { toast } from "sonner";
-import { Pencil, Landmark, ShieldCheck, Lock } from "lucide-react";
+import { Pencil, Landmark, ShieldCheck, Lock, Wallet } from "lucide-react";
 import {
   getActiveSession,
   isFinanceDept,
@@ -41,6 +48,16 @@ import {
   type Employee,
 } from "@/lib/hris-data";
 import { getMenuPermissions, isMenuAllowed, type PermissionMap } from "@/lib/menu-permissions-data";
+import {
+  getKasbonList,
+  addKasbon,
+  markKasbonPaidOff,
+  getComplianceItems,
+  upsertComplianceItem,
+  COMPLIANCE_CATEGORIES,
+  type Kasbon,
+  type ComplianceItem,
+} from "@/lib/finance-dashboard-data";
 
 export const Route = createFileRoute("/finance")({
   head: () => ({
@@ -217,6 +234,10 @@ function FinancePage() {
         />
       )}
 
+      {visible("kasbon") && <KasbonSection employees={employees} />}
+
+      {visible("compliance") && <ComplianceSection />}
+
       {visible("contacts") && <ContactListSection />}
 
       {visible("chat") && (
@@ -368,5 +389,272 @@ function FinanceEditDialog({
         </DialogFooter>
       </DialogContent>
     </Dialog>
+  );
+}
+
+function KasbonSection({ employees }: { employees: Employee[] }) {
+  const [items, setItems] = useState<Kasbon[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [adding, setAdding] = useState(false);
+  const [employeeId, setEmployeeId] = useState("");
+  const [amount, setAmount] = useState("");
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const employeeById = new Map(employees.map((e) => [e.id, e]));
+
+  const refresh = () => {
+    setLoading(true);
+    getKasbonList()
+      .then(setItems)
+      .catch(() => toast.error("Gagal memuat kasbon."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(refresh, []);
+
+  const handleAdd = async () => {
+    if (!employeeId || !amount) {
+      toast.error("Pilih karyawan dan isi jumlah dulu.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await addKasbon({ employeeId, amount: Number(amount), ...(reason ? { reason } : {}) });
+      toast.success("Kasbon dicatat.");
+      setAdding(false);
+      setEmployeeId("");
+      setAmount("");
+      setReason("");
+      refresh();
+    } catch {
+      toast.error("Gagal mencatat kasbon.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleMarkPaidOff = async (id: string) => {
+    try {
+      await markKasbonPaidOff(id);
+      toast.success("Kasbon ditandai lunas.");
+      refresh();
+    } catch {
+      toast.error("Gagal menandai lunas.");
+    }
+  };
+
+  const rupiahLocal = (n: number) => `Rp ${Math.round(n).toLocaleString("id-ID")}`;
+
+  return (
+    <section className="glass-panel p-7">
+      <div className="flex items-center justify-between">
+        <div>
+          <h3 className="text-base font-semibold">Kasbon</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            Uang muka karyawan — dipakai untuk KPI &amp; deteksi anomali (&gt;2× gaji pokok) di
+            Dashboard.
+          </p>
+        </div>
+        <Button onClick={() => setAdding(true)}>
+          <Wallet className="size-4" /> Catat Kasbon
+        </Button>
+      </div>
+
+      <div className="mt-4">
+        {loading ? (
+          <p className="text-sm text-muted-foreground">Memuat…</p>
+        ) : items.length === 0 ? (
+          <p className="text-sm text-muted-foreground">Belum ada kasbon.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Karyawan</TableHead>
+                <TableHead>Jumlah</TableHead>
+                <TableHead>Alasan</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead />
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map((k) => (
+                <TableRow key={k.id}>
+                  <TableCell>{employeeById.get(k.employeeId)?.fullName ?? "—"}</TableCell>
+                  <TableCell>{rupiahLocal(k.amount)}</TableCell>
+                  <TableCell className="text-xs text-muted-foreground">{k.reason || "—"}</TableCell>
+                  <TableCell>
+                    <Badge variant={k.status === "PAID_OFF" ? "secondary" : "destructive"}>
+                      {k.status === "PAID_OFF" ? "Lunas" : "Outstanding"}
+                    </Badge>
+                  </TableCell>
+                  <TableCell>
+                    {k.status === "OUTSTANDING" && (
+                      <Button size="sm" variant="outline" onClick={() => handleMarkPaidOff(k.id)}>
+                        Tandai Lunas
+                      </Button>
+                    )}
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        )}
+      </div>
+
+      <Dialog open={adding} onOpenChange={setAdding}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Catat Kasbon Baru</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-4">
+            <div>
+              <Label>Karyawan</Label>
+              <Select value={employeeId} onValueChange={setEmployeeId}>
+                <SelectTrigger className="mt-2">
+                  <SelectValue placeholder="Pilih karyawan" />
+                </SelectTrigger>
+                <SelectContent>
+                  {employees.map((e) => (
+                    <SelectItem key={e.id} value={e.id}>
+                      {e.fullName}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+            <div>
+              <Label>Jumlah (Rp)</Label>
+              <Input
+                type="number"
+                className="mt-2"
+                value={amount}
+                onChange={(e) => setAmount(e.target.value)}
+              />
+            </div>
+            <div>
+              <Label>Alasan (opsional)</Label>
+              <Input className="mt-2" value={reason} onChange={(e) => setReason(e.target.value)} />
+            </div>
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setAdding(false)}>
+              Batal
+            </Button>
+            <Button onClick={handleAdd} disabled={submitting}>
+              {submitting ? "Menyimpan…" : "Catat"}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+    </section>
+  );
+}
+
+function ComplianceSection() {
+  const [period, setPeriod] = useState(
+    new Date().toLocaleDateString("id-ID", { month: "short", year: "numeric" }),
+  );
+  const [items, setItems] = useState<ComplianceItem[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  const refresh = () => {
+    setLoading(true);
+    getComplianceItems(period)
+      .then(setItems)
+      .catch(() => toast.error("Gagal memuat compliance checklist."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(refresh, [period]);
+
+  const itemByCategory = new Map(items.map((i) => [i.category, i]));
+
+  const handleUpdate = async (category: string, patch: Partial<ComplianceItem>) => {
+    const existing = itemByCategory.get(category);
+    try {
+      await upsertComplianceItem({
+        ...(existing ? { id: existing.id } : {}),
+        category,
+        period,
+        status: existing?.status ?? "BELUM_LUNAS",
+        ...(existing?.deadline ? { deadline: existing.deadline } : {}),
+        ...(existing?.amount !== undefined ? { amount: existing.amount } : {}),
+        ...patch,
+      });
+      refresh();
+    } catch {
+      toast.error("Gagal menyimpan.");
+    }
+  };
+
+  return (
+    <section className="glass-panel p-7">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div>
+          <h3 className="text-base font-semibold">Compliance Checklist Indonesia</h3>
+          <p className="mt-1 text-sm text-muted-foreground">
+            BPJS Kesehatan, BPJS TK, PPh21, THR, Wajib Lapor — per periode.
+          </p>
+        </div>
+        <Input className="w-40" value={period} onChange={(e) => setPeriod(e.target.value)} />
+      </div>
+
+      {loading ? (
+        <p className="mt-4 text-sm text-muted-foreground">Memuat…</p>
+      ) : (
+        <div className="mt-4 space-y-2">
+          {COMPLIANCE_CATEGORIES.map((cat) => {
+            const item = itemByCategory.get(cat);
+            return (
+              <div
+                key={cat}
+                className="flex flex-wrap items-center justify-between gap-3 rounded-lg border border-border p-3"
+              >
+                <span className="font-medium">{cat}</span>
+                <div className="flex items-center gap-2">
+                  <Input
+                    type="date"
+                    className="w-40"
+                    value={item?.deadline ?? ""}
+                    onChange={(e) => handleUpdate(cat, { deadline: e.target.value })}
+                  />
+                  <Select
+                    value={item?.status ?? "BELUM_LUNAS"}
+                    onValueChange={(v) =>
+                      handleUpdate(cat, { status: v as ComplianceItem["status"] })
+                    }
+                  >
+                    <SelectTrigger className="w-36">
+                      <SelectValue />
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="BELUM_LUNAS">Belum Lunas</SelectItem>
+                      <SelectItem value="PROSES">Proses</SelectItem>
+                      <SelectItem value="LUNAS">Lunas</SelectItem>
+                    </SelectContent>
+                  </Select>
+                  <Badge
+                    variant={
+                      item?.status === "LUNAS"
+                        ? "secondary"
+                        : item?.status === "PROSES"
+                          ? "outline"
+                          : "destructive"
+                    }
+                  >
+                    {item?.status === "LUNAS"
+                      ? "Lunas"
+                      : item?.status === "PROSES"
+                        ? "Proses"
+                        : "Belum Lunas"}
+                  </Badge>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </section>
   );
 }

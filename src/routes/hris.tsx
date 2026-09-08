@@ -76,7 +76,8 @@ import {
   clockOut,
   computePayroll,
   addPayroll,
-  markPayrollPaid,
+  setPayrollStatus,
+  type PayrollStatus,
   getAttendance,
   getEmployees,
   joinFaceDescriptors,
@@ -3471,6 +3472,19 @@ function ShiftsTab({ employees, onChange }: { employees: Employee[]; onChange: (
   );
 }
 
+const PAYROLL_STAGE_LABEL: Record<PayrollStatus, string> = {
+  DRAFT: "Dihitung",
+  PENDING_APPROVAL: "Menunggu Approval Direksi",
+  APPROVED: "Disetujui — Siap Transfer",
+  PAID: "Sudah Transfer",
+};
+const PAYROLL_NEXT_STAGE: Record<PayrollStatus, PayrollStatus> = {
+  DRAFT: "PENDING_APPROVAL",
+  PENDING_APPROVAL: "APPROVED",
+  APPROVED: "PAID",
+  PAID: "PAID",
+};
+
 function PayrollTab({
   employees,
   payrolls,
@@ -3717,20 +3731,20 @@ function PayrollTab({
                   <TableCell className="font-semibold">{rupiah(p.netSalary)}</TableCell>
                   <TableCell>
                     <Badge variant={p.paymentStatus === "PAID" ? "default" : "secondary"}>
-                      {p.paymentStatus}
+                      {PAYROLL_STAGE_LABEL[p.paymentStatus]}
                     </Badge>
                   </TableCell>
                   <TableCell>
-                    {p.paymentStatus === "DRAFT" && (
+                    {p.paymentStatus !== "PAID" && (
                       <Button
                         size="sm"
                         variant="outline"
                         onClick={() => {
-                          markPayrollPaid(p.id);
+                          setPayrollStatus(p.id, PAYROLL_NEXT_STAGE[p.paymentStatus]);
                           onChange();
                         }}
                       >
-                        Tandai Dibayar
+                        Lanjut ke {PAYROLL_STAGE_LABEL[PAYROLL_NEXT_STAGE[p.paymentStatus]]}
                       </Button>
                     )}
                   </TableCell>
