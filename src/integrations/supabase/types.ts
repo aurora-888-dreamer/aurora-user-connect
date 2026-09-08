@@ -504,6 +504,9 @@ export type Database = {
           is_active: boolean;
           join_date: string | null;
           nik: string | null;
+          nip: string | null;
+          bpjs_health_number: string | null;
+          bpjs_employment_number: string | null;
           npwp: string | null;
           phone: string | null;
           ptkp_status: string | null;
@@ -540,6 +543,9 @@ export type Database = {
           is_active?: boolean;
           join_date?: string | null;
           nik?: string | null;
+          nip?: string | null;
+          bpjs_health_number?: string | null;
+          bpjs_employment_number?: string | null;
           npwp?: string | null;
           phone?: string | null;
           ptkp_status?: string | null;
@@ -576,6 +582,9 @@ export type Database = {
           is_active?: boolean;
           join_date?: string | null;
           nik?: string | null;
+          nip?: string | null;
+          bpjs_health_number?: string | null;
+          bpjs_employment_number?: string | null;
           npwp?: string | null;
           phone?: string | null;
           ptkp_status?: string | null;
