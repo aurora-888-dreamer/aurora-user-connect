@@ -17,7 +17,12 @@ import { StaffTabBar } from "@/components/StaffTabBar";
 import { getEmployeeById, type Employee } from "@/lib/hris-data";
 import { getStaffSession } from "@/lib/staff-auth";
 import type { StaffAccount } from "@/lib/staff-auth";
-import { submitLeaveRequest, REASON_CATEGORIES, type ReasonCategory } from "@/lib/leave-data";
+import {
+  submitLeaveRequest,
+  getRequestCategories,
+  type ReasonCategory,
+  type RequestCategory,
+} from "@/lib/leave-data";
 
 export const Route = createFileRoute("/staff/request")({
   head: () => ({
@@ -39,6 +44,7 @@ function StaffRequestPage() {
   const [employee, setEmployee] = useState<Employee | null>(null);
   const [requestType, setRequestType] = useState<string>("leave");
   const [reasonCategory, setReasonCategory] = useState<ReasonCategory | "">("");
+  const [categories, setCategories] = useState<RequestCategory[]>([]);
   const [note, setNote] = useState("");
   const [startDate, setStartDate] = useState(new Date().toISOString().slice(0, 10));
   const [endDate, setEndDate] = useState(new Date().toISOString().slice(0, 10));
@@ -55,6 +61,9 @@ function StaffRequestPage() {
       return;
     }
     setAccount(session);
+    getRequestCategories()
+      .then(setCategories)
+      .catch(() => setCategories([]));
   }, [navigate]);
 
   useEffect(() => {
@@ -154,9 +163,9 @@ function StaffRequestPage() {
                     <SelectValue placeholder="Pilih kategori" />
                   </SelectTrigger>
                   <SelectContent>
-                    {REASON_CATEGORIES.map((c) => (
-                      <SelectItem key={c} value={c}>
-                        {c}
+                    {categories.map((c) => (
+                      <SelectItem key={c.id} value={c.name}>
+                        {c.name}
                       </SelectItem>
                     ))}
                   </SelectContent>
