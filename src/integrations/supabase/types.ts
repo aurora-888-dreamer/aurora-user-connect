@@ -190,15 +190,20 @@ export type Database = {
           company_id: string
           date: string
           distance_meters: number | null
+          distance_out_meters: number | null
           employee_id: string
           id: string
           is_outside_office: boolean | null
+          is_outside_office_out: boolean | null
           lat_in: string | null
+          lat_out: number | null
           late_in_reason: string | null
           late_out_reason: string | null
           long_in: string | null
+          long_out: number | null
           needs_supervisor_approval: boolean
           outside_location_note: string | null
+          outside_location_note_out: string | null
           outside_task_status: string | null
           photo_url: string | null
           status: string | null
@@ -209,15 +214,20 @@ export type Database = {
           company_id: string
           date: string
           distance_meters?: number | null
+          distance_out_meters?: number | null
           employee_id: string
           id?: string
           is_outside_office?: boolean | null
+          is_outside_office_out?: boolean | null
           lat_in?: string | null
+          lat_out?: number | null
           late_in_reason?: string | null
           late_out_reason?: string | null
           long_in?: string | null
+          long_out?: number | null
           needs_supervisor_approval?: boolean
           outside_location_note?: string | null
+          outside_location_note_out?: string | null
           outside_task_status?: string | null
           photo_url?: string | null
           status?: string | null
@@ -228,15 +238,20 @@ export type Database = {
           company_id?: string
           date?: string
           distance_meters?: number | null
+          distance_out_meters?: number | null
           employee_id?: string
           id?: string
           is_outside_office?: boolean | null
+          is_outside_office_out?: boolean | null
           lat_in?: string | null
+          lat_out?: number | null
           late_in_reason?: string | null
           late_out_reason?: string | null
           long_in?: string | null
+          long_out?: number | null
           needs_supervisor_approval?: boolean
           outside_location_note?: string | null
+          outside_location_note_out?: string | null
           outside_task_status?: string | null
           photo_url?: string | null
           status?: string | null
