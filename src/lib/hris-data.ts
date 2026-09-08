@@ -194,8 +194,6 @@ type EmployeeRow = {
   join_date: string | null;
   contract_end_date: string | null;
   resign_date: string | null;
-  contract_end_date: string | null;
-  resign_date: string | null;
   npwp: string | null;
   ptkp_status: string | null;
   basic_salary: number;
