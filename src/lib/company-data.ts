@@ -32,6 +32,8 @@ export type CompanyProfile = {
   pensionConstant: number;
   /** JHT (Jaminan Hari Tua) deduction rate — percent of basic salary, company-wide, not per-employee. Government default for the employee's own share is 2%. */
   jhtRatePercent: number;
+  /** Izinkan absen dari luar radius kantor (dengan persetujuan). */
+  allowOutsideAttendance: boolean;
 };
 
 const DEFAULT_COMPANY: CompanyProfile = {
@@ -50,6 +52,7 @@ const DEFAULT_COMPANY: CompanyProfile = {
   pensionYearsMultiplier: 2,
   pensionConstant: 1,
   jhtRatePercent: 2,
+  allowOutsideAttendance: false,
 };
 
 /** Fallback used only if a read/write happens before the office radius has ever been set. */
@@ -96,7 +99,7 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
   const { data, error } = await supabase
     .from("hpm_companies")
     .select(
-      "name, address, phone, whatsapp, email, website, office_lat, office_lng, office_radius_meters, work_start_time, work_end_time, payroll_cutoff_day, pension_years_multiplier, pension_constant, jht_rate_percent",
+      "name, address, phone, whatsapp, email, website, office_lat, office_lng, office_radius_meters, work_start_time, work_end_time, payroll_cutoff_day, pension_years_multiplier, pension_constant, jht_rate_percent, allow_outside_attendance",
     )
     .eq("id", companyId)
     .single();
@@ -119,6 +122,7 @@ export async function getCompanyProfile(): Promise<CompanyProfile> {
     pensionYearsMultiplier: data.pension_years_multiplier ?? 2,
     pensionConstant: data.pension_constant ?? 1,
     jhtRatePercent: data.jht_rate_percent ?? 2,
+    allowOutsideAttendance: data.allow_outside_attendance ?? false,
   };
 }
 
@@ -142,6 +146,7 @@ export async function saveCompanyProfile(profile: CompanyProfile): Promise<void>
       pension_years_multiplier: profile.pensionYearsMultiplier,
       pension_constant: profile.pensionConstant,
       jht_rate_percent: profile.jhtRatePercent,
+      allow_outside_attendance: profile.allowOutsideAttendance,
     })
     .eq("id", companyId);
 
