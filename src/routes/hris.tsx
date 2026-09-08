@@ -7,6 +7,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
+import { Switch } from "@/components/ui/switch";
 import {
   Select,
   SelectContent,
@@ -34,6 +35,10 @@ import {
   MessageSquareText,
   Mail,
   Printer,
+  ArrowUp,
+  ArrowDown,
+  Plus,
+  SplitSquareHorizontal,
   Copy,
   Pencil,
   Trash2,
@@ -122,6 +127,36 @@ import {
   deleteRequestCategory,
   type RequestCategory,
 } from "@/lib/leave-data";
+import {
+  type OrgConfig,
+  type OrgType,
+  type OrgUnit,
+  type Position,
+  type JobLevel,
+  type NamedItem,
+  type StructureTemplateKey,
+  STRUCTURE_TEMPLATES,
+  ORG_TYPES,
+  getOrgConfig,
+  saveOrgConfig,
+  getOrgUnits,
+  addOrgUnit,
+  updateOrgUnit,
+  deleteOrgUnit,
+  getPositions,
+  addPosition,
+  deletePosition,
+  getJobLevels,
+  addJobLevel,
+  deleteJobLevel,
+  getRanks,
+  addRank,
+  deleteRank,
+  getSalaryGrades,
+  addSalaryGrade,
+  deleteSalaryGrade,
+  applyStructureTemplates,
+} from "@/lib/org-structure-data";
 import {
   getStaffAccounts,
   createStaffAccount,
@@ -220,6 +255,7 @@ function HrisPage() {
     {
       label: "Parameter",
       items: [
+        { key: "org-structure", label: "Struktur Organisasi" },
         { key: "locations", label: "Lokasi" },
         { key: "shifts", label: "Jam Kerja" },
         { key: "request-categories", label: "Kategori Pengajuan" },
@@ -262,6 +298,8 @@ function HrisPage() {
         return (
           <StaffAccountsTab employees={employees} accounts={staffAccounts} onChange={refresh} />
         );
+      case "org-structure":
+        return <OrgStructureTab />;
       case "locations":
         return <LocationsTab />;
       case "shifts":
@@ -2279,6 +2317,484 @@ function RequestCategoriesTab() {
 }
 
 const LOCATION_TYPES: LocationType[] = ["Kantor", "Cabang", "Toko", "Gudang", "Pabrik", "Lainnya"];
+
+function OrgStructureTab() {
+  const [config, setConfig] = useState<OrgConfig>({
+    jobLevelEnabled: false,
+    rankGradeEnabled: false,
+    salaryGradeEnabled: false,
+  });
+  const [units, setUnits] = useState<OrgUnit[]>([]);
+  const [positions, setPositions] = useState<Position[]>([]);
+  const [jobLevels, setJobLevels] = useState<JobLevel[]>([]);
+  const [ranks, setRanks] = useState<NamedItem[]>([]);
+  const [salaryGrades, setSalaryGrades] = useState<NamedItem[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [savingConfig, setSavingConfig] = useState(false);
+  const [selectedTemplates, setSelectedTemplates] = useState<Set<StructureTemplateKey>>(new Set());
+  const [applyingTemplates, setApplyingTemplates] = useState(false);
+
+  const refresh = () => {
+    setLoading(true);
+    Promise.all([
+      getOrgConfig(),
+      getOrgUnits(),
+      getPositions(),
+      getJobLevels(),
+      getRanks(),
+      getSalaryGrades(),
+    ])
+      .then(([cfg, u, p, jl, rk, sg]) => {
+        setConfig(cfg);
+        setUnits(u);
+        setPositions(p);
+        setJobLevels(jl);
+        setRanks(rk);
+        setSalaryGrades(sg);
+      })
+      .catch(() => toast.error("Gagal memuat struktur organisasi."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(refresh, []);
+
+  const handleSaveConfig = async () => {
+    setSavingConfig(true);
+    try {
+      await saveOrgConfig(config);
+      toast.success("Pengaturan disimpan.");
+    } catch {
+      toast.error("Gagal menyimpan. Coba lagi.");
+    } finally {
+      setSavingConfig(false);
+    }
+  };
+
+  const toggleTemplate = (key: StructureTemplateKey) => {
+    setSelectedTemplates((prev) => {
+      const next = new Set(prev);
+      if (next.has(key)) next.delete(key);
+      else next.add(key);
+      return next;
+    });
+  };
+
+  const handleApplyTemplates = async () => {
+    if (selectedTemplates.size === 0) {
+      toast.error("Pilih minimal satu template.");
+      return;
+    }
+    setApplyingTemplates(true);
+    try {
+      await applyStructureTemplates(Array.from(selectedTemplates));
+      toast.success("Struktur ditambahkan — tetap bisa diedit bebas di bawah.");
+      setSelectedTemplates(new Set());
+      refresh();
+    } catch {
+      toast.error("Gagal membuat struktur. Coba lagi.");
+    } finally {
+      setApplyingTemplates(false);
+    }
+  };
+
+  const topLevelUnits = units.filter((u) => !u.parentUnitId);
+  const childrenOf = (unitId: string) => units.filter((u) => u.parentUnitId === unitId);
+  const positionsOf = (unitId: string) =>
+    positions.filter((p) => p.orgUnitId === unitId).sort((a, b) => a.orderIndex - b.orderIndex);
+  const positionName = (id?: string) => positions.find((p) => p.id === id)?.name;
+
+  const handleAddSubUnit = async (parentUnitId: string) => {
+    const name = window.prompt("Nama sub-unit baru:");
+    if (!name?.trim()) return;
+    try {
+      await addOrgUnit({
+        name: name.trim(),
+        parentUnitId,
+        orderIndex: childrenOf(parentUnitId).length,
+      });
+      refresh();
+    } catch {
+      toast.error("Gagal menambah unit.");
+    }
+  };
+
+  const handleAddRootUnit = async () => {
+    const name = window.prompt("Nama unit baru (level teratas):");
+    if (!name?.trim()) return;
+    try {
+      await addOrgUnit({ name: name.trim(), parentUnitId: null, orderIndex: topLevelUnits.length });
+      refresh();
+    } catch {
+      toast.error("Gagal menambah unit.");
+    }
+  };
+
+  const handleSplitUnit = async (unit: OrgUnit) => {
+    const name = window.prompt(`Nama unit sejajar baru (pecahan dari "${unit.name}"):`);
+    if (!name?.trim()) return;
+    try {
+      await addOrgUnit({
+        name: name.trim(),
+        parentUnitId: unit.parentUnitId ?? null,
+        orderIndex: unit.orderIndex + 1,
+      });
+      toast.success(`"${unit.name}" dipecah — "${name.trim()}" ditambahkan sejajar.`);
+      refresh();
+    } catch {
+      toast.error("Gagal memecah unit.");
+    }
+  };
+
+  const handleDeleteUnit = async (unit: OrgUnit) => {
+    if (!window.confirm(`Hapus unit "${unit.name}"? Sub-unit & jabatan di dalamnya ikut terhapus.`))
+      return;
+    try {
+      await deleteOrgUnit(unit.id);
+      refresh();
+    } catch {
+      toast.error("Gagal menghapus unit.");
+    }
+  };
+
+  const handleMoveUnit = async (unit: OrgUnit, direction: -1 | 1) => {
+    const siblings = (unit.parentUnitId ? childrenOf(unit.parentUnitId) : topLevelUnits).sort(
+      (a, b) => a.orderIndex - b.orderIndex,
+    );
+    const idx = siblings.findIndex((s) => s.id === unit.id);
+    const swapWith = siblings[idx + direction];
+    if (!swapWith) return;
+    try {
+      await Promise.all([
+        updateOrgUnit(unit.id, { orderIndex: swapWith.orderIndex }),
+        updateOrgUnit(swapWith.id, { orderIndex: unit.orderIndex }),
+      ]);
+      refresh();
+    } catch {
+      toast.error("Gagal memindah urutan.");
+    }
+  };
+
+  const handleAddPosition = async (unitId: string) => {
+    const name = window.prompt("Nama jabatan baru:");
+    if (!name?.trim()) return;
+    const unitPositions = positionsOf(unitId);
+    const reportsTo = unitPositions.length > 0 ? unitPositions[unitPositions.length - 1]!.id : null;
+    try {
+      await addPosition({
+        orgUnitId: unitId,
+        name: name.trim(),
+        reportsToPositionId: reportsTo,
+        orderIndex: unitPositions.length,
+      });
+      refresh();
+    } catch {
+      toast.error("Gagal menambah jabatan.");
+    }
+  };
+
+  const handleDeletePosition = async (position: Position) => {
+    if (!window.confirm(`Hapus jabatan "${position.name}"?`)) return;
+    try {
+      await deletePosition(position.id);
+      refresh();
+    } catch {
+      toast.error("Gagal menghapus jabatan.");
+    }
+  };
+
+  const UnitNode = ({ unit, depth }: { unit: OrgUnit; depth: number }) => (
+    <div className={depth > 0 ? "ml-6 border-l-2 border-border pl-4" : ""}>
+      <div className="rounded-lg border border-border p-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-semibold">{unit.name}</p>
+          <div className="flex gap-1">
+            <Button size="sm" variant="ghost" title="Naik" onClick={() => handleMoveUnit(unit, -1)}>
+              <ArrowUp className="size-3.5" />
+            </Button>
+            <Button size="sm" variant="ghost" title="Turun" onClick={() => handleMoveUnit(unit, 1)}>
+              <ArrowDown className="size-3.5" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleAddPosition(unit.id)}>
+              <UserPlus className="size-3.5" /> Jabatan
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleAddSubUnit(unit.id)}>
+              <Plus className="size-3.5" /> Sub-Unit
+            </Button>
+            <Button
+              size="sm"
+              variant="outline"
+              title="Pecah jadi 2 unit sejajar"
+              onClick={() => handleSplitUnit(unit)}
+            >
+              <SplitSquareHorizontal className="size-3.5" />
+            </Button>
+            <Button size="sm" variant="outline" onClick={() => handleDeleteUnit(unit)}>
+              <Trash2 className="size-3.5" />
+            </Button>
+          </div>
+        </div>
+
+        {positionsOf(unit.id).length > 0 && (
+          <ul className="mt-2 space-y-1">
+            {positionsOf(unit.id).map((p) => (
+              <li
+                key={p.id}
+                className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-1.5 text-sm"
+              >
+                <span>
+                  {p.name}
+                  {p.reportsToPositionId && (
+                    <span className="ml-2 text-xs text-muted-foreground">
+                      → lapor ke {positionName(p.reportsToPositionId)}
+                    </span>
+                  )}
+                </span>
+                <Button size="sm" variant="ghost" onClick={() => handleDeletePosition(p)}>
+                  <Trash2 className="size-3" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </div>
+      {childrenOf(unit.id).length > 0 && (
+        <div className="mt-2 space-y-2">
+          {childrenOf(unit.id)
+            .sort((a, b) => a.orderIndex - b.orderIndex)
+            .map((child) => (
+              <UnitNode key={child.id} unit={child} depth={depth + 1} />
+            ))}
+        </div>
+      )}
+    </div>
+  );
+
+  return (
+    <div className="space-y-6">
+      <div>
+        <h3 className="text-base font-semibold">Struktur Organisasi</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Template cuma titik awal — unit dan jabatan tetap bisa ditambah, dihapus, dipindah, atau
+          dipecah kapan saja setelah dibuat.
+        </p>
+      </div>
+
+      <section className="glass-panel p-6">
+        <h4 className="text-sm font-semibold">Pengaturan Dasar</h4>
+        <div className="mt-3 grid gap-4 sm:grid-cols-2">
+          <div>
+            <Label>Type Organisasi</Label>
+            <Select
+              value={config.orgType ?? "none"}
+              onValueChange={(v) => {
+                if (v === "none") {
+                  const { orgType, ...rest } = config;
+                  void orgType;
+                  setConfig(rest);
+                } else {
+                  setConfig({ ...config, orgType: v as OrgType });
+                }
+              }}
+            >
+              <SelectTrigger className="mt-2">
+                <SelectValue placeholder="Pilih tipe organisasi" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="none">Belum dipilih</SelectItem>
+                {ORG_TYPES.map((t) => (
+                  <SelectItem key={t} value={t}>
+                    {t}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+        <div className="mt-4 grid gap-3 sm:grid-cols-3">
+          <label className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
+            Job Level
+            <Switch
+              checked={config.jobLevelEnabled}
+              onCheckedChange={(v) => setConfig({ ...config, jobLevelEnabled: v })}
+            />
+          </label>
+          <label className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
+            Rank / Grade
+            <Switch
+              checked={config.rankGradeEnabled}
+              onCheckedChange={(v) => setConfig({ ...config, rankGradeEnabled: v })}
+            />
+          </label>
+          <label className="flex items-center justify-between rounded-lg border border-border p-3 text-sm">
+            Salary Grade
+            <Switch
+              checked={config.salaryGradeEnabled}
+              onCheckedChange={(v) => setConfig({ ...config, salaryGradeEnabled: v })}
+            />
+          </label>
+        </div>
+        <Button onClick={handleSaveConfig} className="mt-4" disabled={savingConfig}>
+          {savingConfig ? "Menyimpan…" : "Simpan Pengaturan"}
+        </Button>
+      </section>
+
+      <section className="glass-panel p-6">
+        <h4 className="text-sm font-semibold">Model Struktur</h4>
+        <p className="mt-1 text-xs text-muted-foreground">
+          Pilih satu atau lebih (misal Sekolah + Corporate untuk model campuran) — tiap template
+          jadi cabang tersendiri, berdampingan.
+        </p>
+        <div className="mt-3 grid gap-2 sm:grid-cols-2">
+          {(Object.keys(STRUCTURE_TEMPLATES) as StructureTemplateKey[]).map((key) => {
+            const tpl = STRUCTURE_TEMPLATES[key];
+            return (
+              <label
+                key={key}
+                className="flex items-start gap-2 rounded-lg border border-border p-3 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  className="mt-1"
+                  checked={selectedTemplates.has(key)}
+                  onChange={() => toggleTemplate(key)}
+                />
+                <span>
+                  <span className="font-medium">{tpl.label}</span>
+                  <span className="block text-xs text-muted-foreground">{tpl.description}</span>
+                </span>
+              </label>
+            );
+          })}
+        </div>
+        <Button onClick={handleApplyTemplates} className="mt-4" disabled={applyingTemplates}>
+          {applyingTemplates ? "Membuat…" : "Buat / Tambah Struktur"}
+        </Button>
+      </section>
+
+      <section className="glass-panel p-6">
+        <div className="flex items-center justify-between">
+          <h4 className="text-sm font-semibold">Pohon Struktur</h4>
+          <Button size="sm" variant="outline" onClick={handleAddRootUnit}>
+            <Plus className="size-3.5" /> Unit Level Teratas
+          </Button>
+        </div>
+        {loading ? (
+          <p className="mt-3 text-sm text-muted-foreground">Memuat…</p>
+        ) : topLevelUnits.length === 0 ? (
+          <p className="mt-3 text-sm text-muted-foreground">
+            Belum ada struktur — pilih template di atas, atau tambah unit manual.
+          </p>
+        ) : (
+          <div className="mt-4 space-y-3">
+            {topLevelUnits
+              .sort((a, b) => a.orderIndex - b.orderIndex)
+              .map((u) => (
+                <UnitNode key={u.id} unit={u} depth={0} />
+              ))}
+          </div>
+        )}
+      </section>
+
+      {config.jobLevelEnabled && (
+        <NamedListSection
+          title="Job Level"
+          items={jobLevels}
+          onAdd={async (name) => {
+            await addJobLevel(name, jobLevels.length);
+            refresh();
+          }}
+          onDelete={async (id) => {
+            await deleteJobLevel(id);
+            refresh();
+          }}
+        />
+      )}
+
+      {config.rankGradeEnabled && (
+        <NamedListSection
+          title="Rank / Grade (Pangkat/Golongan)"
+          items={ranks}
+          onAdd={async (name) => {
+            await addRank(name, ranks.length);
+            refresh();
+          }}
+          onDelete={async (id) => {
+            await deleteRank(id);
+            refresh();
+          }}
+        />
+      )}
+
+      {config.salaryGradeEnabled && (
+        <NamedListSection
+          title="Salary Grade"
+          items={salaryGrades}
+          onAdd={async (name) => {
+            await addSalaryGrade(name, salaryGrades.length);
+            refresh();
+          }}
+          onDelete={async (id) => {
+            await deleteSalaryGrade(id);
+            refresh();
+          }}
+        />
+      )}
+    </div>
+  );
+}
+
+function NamedListSection({
+  title,
+  items,
+  onAdd,
+  onDelete,
+}: {
+  title: string;
+  items: { id: string; name: string }[];
+  onAdd: (name: string) => Promise<void>;
+  onDelete: (id: string) => Promise<void>;
+}) {
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const handleAdd = async () => {
+    if (!name.trim()) return;
+    setSubmitting(true);
+    try {
+      await onAdd(name.trim());
+      setName("");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  return (
+    <section className="glass-panel p-6">
+      <h4 className="text-sm font-semibold">{title}</h4>
+      <div className="mt-3 flex gap-2">
+        <Input value={name} onChange={(e) => setName(e.target.value)} placeholder="Nama baru" />
+        <Button onClick={handleAdd} disabled={submitting}>
+          <Plus className="size-4" /> Tambah
+        </Button>
+      </div>
+      {items.length > 0 && (
+        <ul className="mt-3 space-y-1">
+          {items.map((item) => (
+            <li
+              key={item.id}
+              className="flex items-center justify-between rounded-md border border-border px-3 py-1.5 text-sm"
+            >
+              {item.name}
+              <Button size="sm" variant="ghost" onClick={() => onDelete(item.id)}>
+                <Trash2 className="size-3.5" />
+              </Button>
+            </li>
+          ))}
+        </ul>
+      )}
+    </section>
+  );
+}
 
 function LocationsTab() {
   const [items, setItems] = useState<WorkLocation[]>([]);
