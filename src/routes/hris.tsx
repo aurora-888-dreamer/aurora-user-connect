@@ -397,6 +397,8 @@ const emptyForm = {
   bankAccountHolder: "",
   employmentStatus: "PKWT" as EmploymentStatus,
   joinDate: new Date().toISOString().slice(0, 10),
+  contractEndDate: "",
+  resignDate: "",
   npwp: "",
   ptkpStatus: "TK/0" as PtkpStatus,
   supervisorId: "",
@@ -465,6 +467,8 @@ function EmployeeFormDialog({
             bankAccountHolder: editing.bankAccountHolder ?? "",
             employmentStatus: editing.employmentStatus,
             joinDate: editing.joinDate || new Date().toISOString().slice(0, 10),
+            contractEndDate: editing.contractEndDate ?? "",
+            resignDate: editing.resignDate ?? "",
             npwp: editing.npwp,
             ptkpStatus: editing.ptkpStatus,
             supervisorId: editing.supervisorId ?? "",
@@ -532,6 +536,8 @@ function EmployeeFormDialog({
         bankAccountHolder: form.bankAccountHolder,
         employmentStatus: form.employmentStatus,
         joinDate: form.joinDate,
+        ...(form.contractEndDate ? { contractEndDate: form.contractEndDate } : {}),
+        ...(form.resignDate ? { resignDate: form.resignDate } : {}),
         npwp: form.npwp,
         ptkpStatus: form.ptkpStatus,
         isActive: true,
@@ -822,6 +828,24 @@ function EmployeeFormDialog({
               className="mt-2"
               value={form.joinDate}
               onChange={(e) => setForm({ ...form, joinDate: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Kontrak Berakhir (kalau PKWT)</Label>
+            <Input
+              type="date"
+              className="mt-2"
+              value={form.contractEndDate}
+              onChange={(e) => setForm({ ...form, contractEndDate: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>Tanggal Resign (kalau sudah keluar)</Label>
+            <Input
+              type="date"
+              className="mt-2"
+              value={form.resignDate}
+              onChange={(e) => setForm({ ...form, resignDate: e.target.value })}
             />
           </div>
           <div>

@@ -4,9 +4,27 @@ import { AppShell } from "@/components/AppShell";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
+import { Switch } from "@/components/ui/switch";
 import { toast } from "sonner";
 import { LocateFixed, Save, MapPin, Clock } from "lucide-react";
-import { getActiveSession } from "@/lib/admin-auth";
+import {
+  getActiveSession,
+  setActiveSession,
+  updateAdminProfile,
+  changeAdminPin,
+  createAdminUser,
+  type UserProfile,
+  type UserRole,
+} from "@/lib/admin-auth";
+import { getEmployees, type Employee } from "@/lib/hris-data";
+import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from "@/components/ui/select";
 import {
   getCompanyProfile,
   saveCompanyProfile,
@@ -206,6 +224,21 @@ function SettingsPage() {
           </div>
         </div>
 
+        <div className="mt-5 flex items-center justify-between rounded-xl border border-border p-4">
+          <div>
+            <Label>Izinkan Absensi di Luar Area</Label>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Aktif: staff boleh clock-in/out di luar radius asal isi catatan lokasi &amp; status
+              tugas (seperti sekarang). Nonaktif: absensi di luar area diblokir — staff harus
+              mengajukan permohonan ke HRD dulu.
+            </p>
+          </div>
+          <Switch
+            checked={form.allowOutsideAttendance}
+            onCheckedChange={(v) => setForm({ ...form, allowOutsideAttendance: v })}
+          />
+        </div>
+
         <Button
           variant="outline"
           className="mt-4"
@@ -280,6 +313,20 @@ function SettingsPage() {
             </p>
           </div>
           <div>
+            <Label>Tarif JHT (% dari gaji pokok)</Label>
+            <Input
+              type="number"
+              step="any"
+              className="mt-2"
+              value={form.jhtRatePercent}
+              onChange={(e) => setForm({ ...form, jhtRatePercent: Number(e.target.value) || 0 })}
+            />
+            <p className="mt-1 text-xs text-muted-foreground">
+              Berlaku sama untuk semua karyawan, dipotong otomatis dari gaji bersih saat payroll
+              dibuat.
+            </p>
+          </div>
+          <div>
             <Label>Pengali Masa Kerja (n)</Label>
             <Input
               type="number"
@@ -312,6 +359,264 @@ function SettingsPage() {
       <Button onClick={handleSave} size="lg" disabled={saving}>
         <Save className="size-4" /> {saving ? "Menyimpan…" : "Simpan Pengaturan"}
       </Button>
+
+      <AccountAndAdminSection />
     </AppShell>
+  );
+}
+
+function AccountAndAdminSection() {
+  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
+  const [employees, setEmployees] = useState<Employee[]>([]);
+
+  const [fullName, setFullName] = useState("");
+  const [phoneWA, setPhoneWA] = useState("");
+  const [oldPin, setOldPin] = useState("");
+  const [newPin, setNewPin] = useState("");
+
+  const [newUserId, setNewUserId] = useState("");
+  const [newAdminPin, setNewAdminPin] = useState("");
+  const [newAdminEmployeeId, setNewAdminEmployeeId] = useState("");
+  const [newAdminRole, setNewAdminRole] = useState<UserRole>("OPERATOR");
+  const [newAdminDepartment, setNewAdminDepartment] = useState("");
+
+  useEffect(() => {
+    const session = getActiveSession();
+    if (!session) return;
+    setCurrentUser(session);
+    setFullName(session.fullName);
+    setPhoneWA(session.phoneWA);
+    getEmployees()
+      .then(setEmployees)
+      .catch(() => setEmployees([]));
+  }, []);
+
+  if (!currentUser) return null;
+
+  const selectedEmployee = employees.find((e) => e.id === newAdminEmployeeId);
+  const willBeTopAdmin = selectedEmployee?.positionLevel === "Direktur";
+
+  const handleSaveProfile = async (e: React.FormEvent) => {
+    e.preventDefault();
+    try {
+      await updateAdminProfile(currentUser.userId, { fullName, phoneWA });
+      const updatedSession = { ...currentUser, fullName, phoneWA };
+      setActiveSession(updatedSession);
+      setCurrentUser(updatedSession);
+      toast.success("Profil berhasil diperbarui!");
+    } catch {
+      toast.error("Gagal menyimpan profil. Periksa koneksi internet.");
+    }
+  };
+
+  const handleChangePin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (newPin.length !== 6) {
+      toast.error("PIN Baru harus 6 digit!");
+      return;
+    }
+    try {
+      const ok = await changeAdminPin(currentUser.userId, oldPin, newPin);
+      if (!ok) {
+        toast.error("PIN Lama tidak sesuai!");
+        return;
+      }
+      setOldPin("");
+      setNewPin("");
+      toast.success("PIN berhasil diubah!");
+    } catch {
+      toast.error("Gagal mengubah PIN. Periksa koneksi internet.");
+    }
+  };
+
+  const handleAddAdmin = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newAdminEmployeeId) {
+      toast.error(
+        "Pilih karyawan dari HRIS dulu — admin cuma bisa diberikan ke orang yang sudah terdaftar.",
+      );
+      return;
+    }
+    try {
+      await createAdminUser({
+        userId: newUserId,
+        pin: newAdminPin,
+        employeeId: newAdminEmployeeId,
+        role: newAdminRole,
+        ...(newAdminDepartment ? { department: newAdminDepartment } : {}),
+      });
+      toast.success(`Pengguna baru ${newUserId.toUpperCase()} berhasil ditambahkan!`);
+      setNewUserId("");
+      setNewAdminPin("");
+      setNewAdminEmployeeId("");
+      setNewAdminDepartment("");
+    } catch {
+      toast.error("Gagal menambahkan pengguna. User ID mungkin sudah digunakan.");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <div className="grid gap-6 md:grid-cols-2">
+        <Card>
+          <CardHeader>
+            <CardTitle>Akun Saya — Edit Profil</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleSaveProfile} className="space-y-4">
+              <div>
+                <Label>Nama Lengkap</Label>
+                <Input
+                  className="mt-2"
+                  value={fullName}
+                  onChange={(e) => setFullName(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>No WhatsApp / HP</Label>
+                <Input
+                  className="mt-2"
+                  value={phoneWA}
+                  onChange={(e) => setPhoneWA(e.target.value)}
+                />
+              </div>
+              <Button type="submit" className="w-full">
+                Simpan Profil
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle>Ubah PIN (6 Digit)</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleChangePin} className="space-y-4">
+              <div>
+                <Label>PIN Lama</Label>
+                <Input
+                  type="password"
+                  maxLength={6}
+                  className="mt-2"
+                  value={oldPin}
+                  onChange={(e) => setOldPin(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label>PIN Baru</Label>
+                <Input
+                  type="password"
+                  maxLength={6}
+                  className="mt-2"
+                  value={newPin}
+                  onChange={(e) => setNewPin(e.target.value)}
+                />
+              </div>
+              <Button type="submit" className="w-full">
+                Perbarui PIN
+              </Button>
+            </form>
+          </CardContent>
+        </Card>
+      </div>
+
+      {(currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN") && (
+        <Card>
+          <CardHeader>
+            <CardTitle>Tambah Pengguna / Admin Baru</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <form onSubmit={handleAddAdmin} className="grid gap-4 md:grid-cols-2">
+              <div className="md:col-span-2">
+                <Label>Karyawan (dari HRIS)</Label>
+                <Select value={newAdminEmployeeId} onValueChange={setNewAdminEmployeeId}>
+                  <SelectTrigger className="mt-2">
+                    <SelectValue placeholder="Pilih karyawan yang sudah terdaftar" />
+                  </SelectTrigger>
+                  <SelectContent>
+                    {employees.length === 0 ? (
+                      <div className="p-2 text-sm text-muted-foreground">
+                        Belum ada karyawan — daftarkan dulu di Core HRIS.
+                      </div>
+                    ) : (
+                      employees.map((e) => (
+                        <SelectItem key={e.id} value={e.id}>
+                          {e.fullName} — {e.position || e.department || "belum ada jabatan"}
+                        </SelectItem>
+                      ))
+                    )}
+                  </SelectContent>
+                </Select>
+                <p className="mt-1 text-xs text-muted-foreground">
+                  Akses admin cuma bisa diberikan ke orang yang sudah lengkap datanya di HRIS —
+                  nama, departemen, dan jabatan otomatis ikut data karyawannya, tidak diketik ulang.
+                </p>
+                {selectedEmployee && (
+                  <p className="mt-2 text-xs">
+                    {selectedEmployee.department || "—"} · {selectedEmployee.position || "—"} ·
+                    Level: {selectedEmployee.positionLevel}
+                  </p>
+                )}
+              </div>
+              <div>
+                <Label>User ID Baru</Label>
+                <Input
+                  className="mt-2 uppercase"
+                  value={newUserId}
+                  onChange={(e) => setNewUserId(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <Label>PIN Awal (6 Digit)</Label>
+                <Input
+                  type="password"
+                  maxLength={6}
+                  className="mt-2"
+                  value={newAdminPin}
+                  onChange={(e) => setNewAdminPin(e.target.value)}
+                  required
+                />
+              </div>
+              <div>
+                <Label>Pilih Role</Label>
+                {willBeTopAdmin ? (
+                  <p className="mt-2 rounded-md border border-primary/40 bg-primary/10 p-2 text-sm text-primary">
+                    Otomatis jadi <strong>TOP ADMIN</strong> — level jabatan Direktur, akses penuh
+                    ke semua modul kecuali Dev Console.
+                  </p>
+                ) : (
+                  <select
+                    value={newAdminRole}
+                    onChange={(e) => setNewAdminRole(e.target.value as UserRole)}
+                    className="mt-2 w-full rounded-md border border-input bg-background p-2 text-sm"
+                  >
+                    <option value="SUPER_ADMIN">SUPER ADMIN</option>
+                    <option value="ADMIN">ADMIN</option>
+                    <option value="OPERATOR">OPERATOR</option>
+                  </select>
+                )}
+              </div>
+              <div>
+                <Label>Departemen Akses (opsional)</Label>
+                <Input
+                  className="mt-2"
+                  value={newAdminDepartment}
+                  onChange={(e) => setNewAdminDepartment(e.target.value)}
+                  placeholder='Isi "Finance" untuk akses modul Finance'
+                  disabled={willBeTopAdmin}
+                />
+              </div>
+              <div className="md:col-span-2">
+                <Button type="submit" className="w-full">
+                  Tambah Pengguna
+                </Button>
+              </div>
+            </form>
+          </CardContent>
+        </Card>
+      )}
+    </div>
   );
 }

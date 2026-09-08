@@ -1,51 +1,43 @@
-// src/routes/dashboard.tsx
-import { createFileRoute, useNavigate } from "@tanstack/react-router";
-import { useState, useEffect } from "react";
+import { createFileRoute, useNavigate, Link } from "@tanstack/react-router";
+import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
-import {
-  getActiveSession,
-  setActiveSession,
-  updateAdminProfile,
-  changeAdminPin,
-  createAdminUser,
-  UserProfile,
-  UserRole,
-} from "@/lib/admin-auth";
-import { getEmployees, type Employee } from "@/lib/hris-data";
-import { Button } from "@/components/ui/button";
-import { Input } from "@/components/ui/input";
-import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from "@/components/ui/select";
+import { Badge } from "@/components/ui/badge";
+import { Users, UserCheck, UserMinus, Cake, FileWarning, Inbox, AlertTriangle } from "lucide-react";
+import { getActiveSession } from "@/lib/admin-auth";
+import { getHrdDashboardData, type HrdDashboardData } from "@/lib/hrd-dashboard-data";
 
 export const Route = createFileRoute("/dashboard")({
   component: DashboardComponent,
 });
 
+function KpiCard({
+  icon: Icon,
+  label,
+  value,
+  hint,
+}: {
+  icon: React.ComponentType<{ className?: string }>;
+  label: string;
+  value: string;
+  hint?: string;
+}) {
+  return (
+    <div className="glass-panel p-5">
+      <div className="flex items-center gap-2 text-xs font-medium uppercase tracking-wide text-muted-foreground">
+        <Icon className="size-3.5" /> {label}
+      </div>
+      <p className="mt-2 text-3xl font-bold">{value}</p>
+      {hint && <p className="mt-1 text-xs text-muted-foreground">{hint}</p>}
+    </div>
+  );
+}
+
 function DashboardComponent() {
   const navigate = useNavigate();
-  const [currentUser, setCurrentUser] = useState<UserProfile | null>(null);
-  const [employees, setEmployees] = useState<Employee[]>([]);
-
-  // Form State Edit Profile
+  const [ready, setReady] = useState(false);
   const [fullName, setFullName] = useState("");
-  const [phoneWA, setPhoneWA] = useState("");
-
-  // Form State Change PIN
-  const [oldPin, setOldPin] = useState("");
-  const [newPin, setNewPin] = useState("");
-
-  // Form State Add Admin — grants admin access to an ALREADY-REGISTERED employee, doesn't create a new person.
-  const [newUserId, setNewUserId] = useState("");
-  const [newAdminPin, setNewAdminPin] = useState("");
-  const [newAdminEmployeeId, setNewAdminEmployeeId] = useState("");
-  const [newAdminRole, setNewAdminRole] = useState<UserRole>("OPERATOR");
-  const [newAdminDepartment, setNewAdminDepartment] = useState("");
+  const [data, setData] = useState<HrdDashboardData | null>(null);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     const session = getActiveSession();
@@ -53,233 +45,241 @@ function DashboardComponent() {
       navigate({ to: "/" });
       return;
     }
-    setCurrentUser(session);
     setFullName(session.fullName);
-    setPhoneWA(session.phoneWA);
-    getEmployees()
-      .then(setEmployees)
-      .catch(() => setEmployees([]));
+    setReady(true);
+    getHrdDashboardData()
+      .then(setData)
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, [navigate]);
 
-  if (!currentUser) return null;
-
-  const selectedEmployee = employees.find((e) => e.id === newAdminEmployeeId);
-  const willBeTopAdmin = selectedEmployee?.positionLevel === "Direktur";
-
-  const handleSaveProfile = async (e: React.FormEvent) => {
-    e.preventDefault();
-    try {
-      await updateAdminProfile(currentUser.userId, { fullName, phoneWA });
-      const updatedSession = { ...currentUser, fullName, phoneWA };
-      setActiveSession(updatedSession);
-      setCurrentUser(updatedSession);
-      alert("Profil berhasil diperbarui!");
-    } catch {
-      alert("Gagal menyimpan profil. Periksa koneksi internet.");
-    }
-  };
-
-  const handleChangePin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (newPin.length !== 6) {
-      alert("PIN Baru harus 6 digit!");
-      return;
-    }
-    try {
-      const ok = await changeAdminPin(currentUser.userId, oldPin, newPin);
-      if (!ok) {
-        alert("PIN Lama tidak sesuai!");
-        return;
-      }
-      setOldPin("");
-      setNewPin("");
-      alert("PIN berhasil diubah!");
-    } catch {
-      alert("Gagal mengubah PIN. Periksa koneksi internet.");
-    }
-  };
-
-  const handleAddAdmin = async (e: React.FormEvent) => {
-    e.preventDefault();
-    if (!newAdminEmployeeId) {
-      alert(
-        "Pilih karyawan dari HRIS dulu — admin cuma bisa diberikan ke orang yang sudah terdaftar.",
-      );
-      return;
-    }
-    try {
-      await createAdminUser({
-        userId: newUserId,
-        pin: newAdminPin,
-        employeeId: newAdminEmployeeId,
-        role: newAdminRole,
-        ...(newAdminDepartment ? { department: newAdminDepartment } : {}),
-      });
-      alert(`Pengguna baru ${newUserId.toUpperCase()} berhasil ditambahkan!`);
-      setNewUserId("");
-      setNewAdminPin("");
-      setNewAdminEmployeeId("");
-      setNewAdminDepartment("");
-    } catch {
-      alert("Gagal menambahkan pengguna. User ID mungkin sudah digunakan.");
-    }
-  };
+  if (!ready) return null;
 
   return (
     <AppShell
-      title={`Selamat datang, ${currentUser.fullName}`}
-      description={`${currentUser.userId} · ${currentUser.role} — kelola profil, PIN, atau buka modul HRIS/ATS dari menu di samping.`}
+      title={`Selamat datang, ${fullName}`}
+      description="Dashboard HRD — kesehatan organisasi hari ini. Edit profil, ubah PIN, atau tambah admin baru ada di menu Pengaturan."
     >
-      <div className="grid gap-6 md:grid-cols-2">
-        {/* Form Edit Profile */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Edit Profil</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleSaveProfile} className="space-y-4">
-              <div>
-                <label className="text-sm">Nama Lengkap</label>
-                <Input value={fullName} onChange={(e) => setFullName(e.target.value)} />
-              </div>
-              <div>
-                <label className="text-sm">No WhatsApp / HP</label>
-                <Input value={phoneWA} onChange={(e) => setPhoneWA(e.target.value)} />
-              </div>
-              <Button type="submit" className="w-full">
-                Simpan Profil
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
+      {loading || !data ? (
+        <p className="text-sm text-muted-foreground">Memuat dashboard…</p>
+      ) : (
+        <div className="space-y-6">
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <KpiCard
+              icon={Users}
+              label="Headcount"
+              value={String(data.headcount)}
+              hint="Karyawan aktif"
+            />
+            <KpiCard
+              icon={UserCheck}
+              label="Kehadiran Hari Ini"
+              value={`${data.attendancePercentToday}%`}
+              hint={`dari ${data.headcount} karyawan aktif`}
+            />
+            <KpiCard
+              icon={UserMinus}
+              label="Turnover MTD"
+              value={String(data.turnoverMTD)}
+              hint="Resign bulan ini"
+            />
+            <KpiCard
+              icon={Inbox}
+              label="Pengajuan Menunggu"
+              value={String(data.pendingLeaveCount)}
+              hint="Cuti/izin belum diputuskan"
+            />
+          </div>
 
-        {/* Form Change PIN */}
-        <Card>
-          <CardHeader>
-            <CardTitle>Ubah PIN (6 Digit)</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleChangePin} className="space-y-4">
-              <div>
-                <label className="text-sm">PIN Lama</label>
-                <Input
-                  type="password"
-                  maxLength={6}
-                  value={oldPin}
-                  onChange={(e) => setOldPin(e.target.value)}
-                />
-              </div>
-              <div>
-                <label className="text-sm">PIN Baru</label>
-                <Input
-                  type="password"
-                  maxLength={6}
-                  value={newPin}
-                  onChange={(e) => setNewPin(e.target.value)}
-                />
-              </div>
-              <Button type="submit" className="w-full">
-                Perbarui PIN
-              </Button>
-            </form>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Form Add Admin (Hanya untuk Role SUPER_ADMIN / ADMIN) */}
-      {(currentUser.role === "SUPER_ADMIN" || currentUser.role === "ADMIN") && (
-        <Card>
-          <CardHeader>
-            <CardTitle>Tambah Pengguna / Admin Baru</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form onSubmit={handleAddAdmin} className="grid gap-4 md:grid-cols-2">
-              <div className="md:col-span-2">
-                <label className="text-sm">Karyawan (dari HRIS)</label>
-                <Select value={newAdminEmployeeId} onValueChange={setNewAdminEmployeeId}>
-                  <SelectTrigger>
-                    <SelectValue placeholder="Pilih karyawan yang sudah terdaftar" />
-                  </SelectTrigger>
-                  <SelectContent>
-                    {employees.length === 0 ? (
-                      <div className="p-2 text-sm text-muted-foreground">
-                        Belum ada karyawan — daftarkan dulu di Core HRIS.
-                      </div>
-                    ) : (
-                      employees.map((e) => (
-                        <SelectItem key={e.id} value={e.id}>
-                          {e.fullName} — {e.position || e.department || "belum ada jabatan"}
-                        </SelectItem>
-                      ))
-                    )}
-                  </SelectContent>
-                </Select>
-                <p className="mt-1 text-xs text-muted-foreground">
-                  Akses admin cuma bisa diberikan ke orang yang sudah lengkap datanya di HRIS —
-                  nama, departemen, dan jabatan otomatis ikut data karyawannya, tidak diketik ulang.
-                </p>
-                {selectedEmployee && (
-                  <p className="mt-2 text-xs">
-                    {selectedEmployee.department || "—"} · {selectedEmployee.position || "—"} ·
-                    Level: {selectedEmployee.positionLevel}
-                  </p>
-                )}
-              </div>
-              <div>
-                <label className="text-sm">User ID Baru</label>
-                <Input
-                  value={newUserId}
-                  onChange={(e) => setNewUserId(e.target.value)}
-                  required
-                  className="uppercase"
-                />
-              </div>
-              <div>
-                <label className="text-sm">PIN Awal (6 Digit)</label>
-                <Input
-                  type="password"
-                  maxLength={6}
-                  value={newAdminPin}
-                  onChange={(e) => setNewAdminPin(e.target.value)}
-                  required
-                />
-              </div>
-              <div>
-                <label className="text-sm">Pilih Role</label>
-                {willBeTopAdmin ? (
-                  <p className="rounded-md border border-primary/40 bg-primary/10 p-2 text-sm text-primary">
-                    Otomatis jadi <strong>TOP ADMIN</strong> — level jabatan Direktur, akses penuh
-                    ke semua modul kecuali Dev Console.
-                  </p>
+          <div className="grid gap-6 lg:grid-cols-2">
+            <section className="glass-panel p-5">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <UserCheck className="size-4 text-primary" /> People Pulse Today
+              </h3>
+              <div className="mt-3 max-h-96 space-y-1.5 overflow-y-auto">
+                {data.peoplePulseToday.length === 0 ? (
+                  <p className="text-sm text-muted-foreground">Belum ada karyawan aktif.</p>
                 ) : (
-                  <select
-                    value={newAdminRole}
-                    onChange={(e) => setNewAdminRole(e.target.value as UserRole)}
-                    className="w-full rounded-md border border-input bg-background p-2 text-sm"
-                  >
-                    <option value="SUPER_ADMIN">SUPER ADMIN</option>
-                    <option value="ADMIN">ADMIN</option>
-                    <option value="OPERATOR">OPERATOR</option>
-                  </select>
+                  data.peoplePulseToday
+                    .sort(
+                      (a, b) =>
+                        (a.status === "Belum Absen" ? 1 : 0) - (b.status === "Belum Absen" ? 1 : 0),
+                    )
+                    .map((row) => (
+                      <div
+                        key={row.employeeId}
+                        className="flex items-center justify-between gap-3 rounded-lg border border-border px-3 py-2 text-sm"
+                      >
+                        <div className="flex items-center gap-2 min-w-0">
+                          {row.photoDataUrl ? (
+                            <img
+                              src={row.photoDataUrl}
+                              alt=""
+                              className="size-7 shrink-0 rounded-full object-cover"
+                            />
+                          ) : (
+                            <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-muted text-[0.6rem] text-muted-foreground">
+                              {row.fullName.slice(0, 1)}
+                            </div>
+                          )}
+                          <div className="min-w-0">
+                            <p className="truncate font-medium">{row.fullName}</p>
+                            <p className="truncate text-xs text-muted-foreground">
+                              {row.department}
+                            </p>
+                          </div>
+                        </div>
+                        <div className="shrink-0 text-right">
+                          <Badge
+                            variant={
+                              row.status === "Hadir"
+                                ? "secondary"
+                                : row.status === "Telat"
+                                  ? "destructive"
+                                  : "outline"
+                            }
+                          >
+                            {row.status}
+                          </Badge>
+                          {row.clockIn && (
+                            <p className="mt-0.5 text-xs text-muted-foreground">
+                              {new Date(row.clockIn).toLocaleTimeString("id-ID", {
+                                hour: "2-digit",
+                                minute: "2-digit",
+                              })}
+                            </p>
+                          )}
+                        </div>
+                      </div>
+                    ))
                 )}
               </div>
-              <div>
-                <label className="text-sm">Departemen Akses (opsional)</label>
-                <Input
-                  value={newAdminDepartment}
-                  onChange={(e) => setNewAdminDepartment(e.target.value)}
-                  placeholder='Isi "Finance" untuk akses modul Finance'
-                  disabled={willBeTopAdmin}
-                />
+            </section>
+
+            <section className="glass-panel p-5">
+              <h3 className="flex items-center gap-2 text-sm font-semibold">
+                <AlertTriangle className="size-4 text-amber-500" /> Alert Center
+              </h3>
+              <div className="mt-3 space-y-4">
+                <div>
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <FileWarning className="size-3.5" /> Kontrak Akan Berakhir
+                  </p>
+                  {data.contractAlerts.length === 0 ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Tidak ada dalam 60 hari ke depan.
+                    </p>
+                  ) : (
+                    <ul className="mt-1.5 space-y-1">
+                      {data.contractAlerts.map((a) => (
+                        <li
+                          key={a.employee.id}
+                          className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-1.5 text-sm"
+                        >
+                          <span>{a.employee.fullName}</span>
+                          <Badge variant={a.daysLeft <= 7 ? "destructive" : "secondary"}>
+                            {a.daysLeft} hari lagi
+                          </Badge>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <div>
+                  <p className="flex items-center gap-1.5 text-xs font-medium text-muted-foreground">
+                    <Cake className="size-3.5" /> Ulang Tahun
+                  </p>
+                  {data.birthdayAlerts.length === 0 ? (
+                    <p className="mt-1 text-sm text-muted-foreground">
+                      Tidak ada dalam 30 hari ke depan.
+                    </p>
+                  ) : (
+                    <ul className="mt-1.5 space-y-1">
+                      {data.birthdayAlerts.map((a) => (
+                        <li
+                          key={a.employee.id}
+                          className="flex items-center justify-between rounded-md bg-muted/50 px-3 py-1.5 text-sm"
+                        >
+                          <span>{a.employee.fullName}</span>
+                          <span className="text-xs text-muted-foreground">
+                            {a.daysUntil === 0 ? "Hari ini!" : `${a.daysUntil} hari lagi`}
+                          </span>
+                        </li>
+                      ))}
+                    </ul>
+                  )}
+                </div>
+
+                <p className="text-xs text-muted-foreground">
+                  Habis probation, dokumen tidak lengkap, dan SP butuh review belum tersedia — perlu
+                  modul tambahan untuk data itu.
+                </p>
               </div>
-              <div className="md:col-span-2">
-                <Button type="submit" className="w-full">
-                  Tambah Pengguna
-                </Button>
-              </div>
-            </form>
-          </CardContent>
-        </Card>
+            </section>
+          </div>
+
+          <section className="glass-panel p-5">
+            <h3 className="text-sm font-semibold">Org Health Heatmap</h3>
+            <p className="mt-1 text-xs text-muted-foreground">
+              Per departemen — merah kalau telat/absen hari ini cukup banyak.
+            </p>
+            <div className="mt-3 overflow-x-auto">
+              <table className="w-full text-left text-sm">
+                <thead className="border-b border-border text-xs uppercase text-muted-foreground">
+                  <tr>
+                    <th className="py-2 pr-4">Departemen</th>
+                    <th className="py-2 pr-4">Headcount</th>
+                    <th className="py-2 pr-4">Telat Hari Ini</th>
+                    <th className="py-2 pr-4">Belum Absen</th>
+                    <th className="py-2 pr-4">Resign MTD</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {data.orgHealth.map((row) => (
+                    <tr key={row.department} className="border-b border-border/60 last:border-0">
+                      <td className="py-2 pr-4 font-medium">{row.department}</td>
+                      <td className="py-2 pr-4">{row.headcount}</td>
+                      <td className="py-2 pr-4">
+                        <span
+                          className={row.lateToday > row.headcount * 0.2 ? "text-destructive" : ""}
+                        >
+                          {row.lateToday}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4">
+                        <span
+                          className={
+                            row.absentToday > row.headcount * 0.2 ? "text-destructive" : ""
+                          }
+                        >
+                          {row.absentToday}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-4">{row.resignedMTD}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+
+          <section className="glass-panel p-5">
+            <h3 className="flex items-center gap-2 text-sm font-semibold">
+              <Inbox className="size-4 text-primary" /> Quick Action Inbox
+            </h3>
+            <div className="mt-3 flex items-center justify-between rounded-lg border border-border px-4 py-3 text-sm">
+              <span>{data.pendingLeaveCount} pengajuan cuti/izin menunggu keputusan</span>
+              <Link to="/hris" className="text-primary hover:underline">
+                Buka HRIS →
+              </Link>
+            </div>
+            <p className="mt-2 text-xs text-muted-foreground">
+              Review SP dan jadwal interview final belum tersedia di sini — perlu modul Surat
+              Peringatan dan integrasi lebih lanjut dengan ATS.
+            </p>
+          </section>
+        </div>
       )}
     </AppShell>
   );
