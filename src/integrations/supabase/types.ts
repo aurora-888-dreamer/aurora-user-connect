@@ -505,6 +505,8 @@ export type Database = {
           position_level: string;
           blood_type: string | null;
           date_of_birth: string | null;
+          contract_end_date: string | null;
+          resign_date: string | null;
           location_id: string | null;
           shift_type_id: string | null;
           family_data: Json | null;
@@ -547,6 +549,8 @@ export type Database = {
           position_level?: string;
           blood_type?: string | null;
           date_of_birth?: string | null;
+          contract_end_date?: string | null;
+          resign_date?: string | null;
           location_id?: string | null;
           shift_type_id?: string | null;
           family_data?: Json | null;
@@ -589,6 +593,8 @@ export type Database = {
           position_level?: string;
           blood_type?: string | null;
           date_of_birth?: string | null;
+          contract_end_date?: string | null;
+          resign_date?: string | null;
           location_id?: string | null;
           shift_type_id?: string | null;
           family_data?: Json | null;
