@@ -7,7 +7,6 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Badge } from "@/components/ui/badge";
 import { Textarea } from "@/components/ui/textarea";
-import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
 import {
   Select,
   SelectContent,
@@ -32,6 +31,9 @@ import {
   Megaphone,
   MapPinned,
   Clock3,
+  MessageSquareText,
+  Mail,
+  Printer,
   Copy,
   Pencil,
   Trash2,
@@ -166,6 +168,7 @@ function HrisPage() {
   const [staffAccounts, setStaffAccounts] = useState<StaffAccount[]>([]);
   const [payrolls, setPayrolls] = useState<Payroll[]>([]);
   const [permMap, setPermMap] = useState<PermissionMap>({});
+  const [activeMenuKey, setActiveMenuKey] = useState("employees");
 
   const refresh = async () => {
     setLoading(true);
@@ -206,6 +209,93 @@ function HrisPage() {
   const visible = (menuKey: string) =>
     fullMenuAccess || !session || isMenuAllowed(permMap, session.role, menuKey);
 
+  const menuGroups: { label: string; items: { key: string; label: string }[] }[] = [
+    {
+      label: "Data Karyawan",
+      items: [
+        { key: "employees", label: "Database Karyawan" },
+        { key: "staff-accounts", label: "Akun Staff" },
+      ],
+    },
+    {
+      label: "Parameter",
+      items: [
+        { key: "locations", label: "Lokasi" },
+        { key: "shifts", label: "Jam Kerja" },
+        { key: "request-categories", label: "Kategori Pengajuan" },
+      ],
+    },
+    {
+      label: "Absensi",
+      items: [
+        { key: "attendance", label: "Absensi GPS" },
+        { key: "final-report", label: "Laporan Akhir" },
+        { key: "outside-requests", label: "Pengajuan Absensi Luar" },
+      ],
+    },
+    {
+      label: "Komunikasi",
+      items: [
+        { key: "announcements", label: "Pengumuman" },
+        { key: "contacts", label: "Contact List" },
+        { key: "chat", label: "Chat" },
+      ],
+    },
+    {
+      label: "Keuangan",
+      items: [{ key: "payroll", label: "Payroll" }],
+    },
+  ]
+    .map((g) => ({ ...g, items: g.items.filter((i) => visible(i.key)) }))
+    .filter((g) => g.items.length > 0);
+
+  const firstAvailableKey = menuGroups[0]?.items[0]?.key ?? "employees";
+  const activeMenu = menuGroups.some((g) => g.items.some((i) => i.key === activeMenuKey))
+    ? activeMenuKey
+    : firstAvailableKey;
+
+  const renderContent = () => {
+    switch (activeMenu) {
+      case "employees":
+        return <EmployeeTab employees={employees} accounts={staffAccounts} onChange={refresh} />;
+      case "staff-accounts":
+        return (
+          <StaffAccountsTab employees={employees} accounts={staffAccounts} onChange={refresh} />
+        );
+      case "locations":
+        return <LocationsTab />;
+      case "shifts":
+        return <ShiftsTab employees={employees} onChange={refresh} />;
+      case "attendance":
+        return <AttendanceTab employees={employees} attendance={attendance} onChange={refresh} />;
+      case "final-report":
+        return <FinalReportTab employees={employees} />;
+      case "outside-requests":
+        return <OutsideAttendanceRequestsTab employees={employees} />;
+      case "announcements":
+        return <AnnouncementsTab />;
+      case "request-categories":
+        return <RequestCategoriesTab />;
+      case "contacts":
+        return <ContactListSection />;
+      case "chat":
+        return session ? (
+          <ChatSection
+            me={{
+              type: "admin",
+              id: session.id,
+              userId: session.userId,
+              fullName: session.fullName,
+            }}
+          />
+        ) : null;
+      case "payroll":
+        return <PayrollTab employees={employees} payrolls={payrolls} onChange={refresh} />;
+      default:
+        return null;
+    }
+  };
+
   return (
     <AppShell
       title="Core HRIS Internal"
@@ -214,113 +304,34 @@ function HrisPage() {
       {loading && employees.length === 0 ? (
         <p className="text-sm text-muted-foreground">Memuat data…</p>
       ) : (
-        <Tabs defaultValue="employees">
-          <TabsList>
-            {visible("employees") && <TabsTrigger value="employees">Database Karyawan</TabsTrigger>}
-            {visible("locations") && <TabsTrigger value="locations">Lokasi</TabsTrigger>}
-            {visible("shifts") && <TabsTrigger value="shifts">Jam Kerja</TabsTrigger>}
-            {visible("attendance") && <TabsTrigger value="attendance">Absensi GPS</TabsTrigger>}
-            {visible("final-report") && (
-              <TabsTrigger value="final-report">Laporan Akhir</TabsTrigger>
-            )}
-            {visible("outside-requests") && (
-              <TabsTrigger value="outside-requests">Pengajuan Absensi Luar</TabsTrigger>
-            )}
-            {visible("staff-accounts") && (
-              <TabsTrigger value="staff-accounts">Akun Staff</TabsTrigger>
-            )}
-            {visible("announcements") && (
-              <TabsTrigger value="announcements">Pengumuman</TabsTrigger>
-            )}
-            {visible("request-categories") && (
-              <TabsTrigger value="request-categories">Kategori Pengajuan</TabsTrigger>
-            )}
-            {visible("contacts") && <TabsTrigger value="contacts">Contact List</TabsTrigger>}
-            {visible("chat") && <TabsTrigger value="chat">Chat</TabsTrigger>}
-            {visible("payroll") && <TabsTrigger value="payroll">Payroll</TabsTrigger>}
-          </TabsList>
+        <div className="flex flex-col-reverse gap-6 lg:flex-row lg:items-start">
+          <div className="min-w-0 flex-1">{renderContent()}</div>
 
-          {visible("employees") && (
-            <TabsContent value="employees" className="mt-6">
-              <EmployeeTab employees={employees} accounts={staffAccounts} onChange={refresh} />
-            </TabsContent>
-          )}
-
-          {visible("locations") && (
-            <TabsContent value="locations" className="mt-6">
-              <LocationsTab />
-            </TabsContent>
-          )}
-
-          {visible("shifts") && (
-            <TabsContent value="shifts" className="mt-6">
-              <ShiftsTab employees={employees} onChange={refresh} />
-            </TabsContent>
-          )}
-
-          {visible("attendance") && (
-            <TabsContent value="attendance" className="mt-6">
-              <AttendanceTab employees={employees} attendance={attendance} onChange={refresh} />
-            </TabsContent>
-          )}
-
-          {visible("final-report") && (
-            <TabsContent value="final-report" className="mt-6">
-              <FinalReportTab employees={employees} />
-            </TabsContent>
-          )}
-
-          {visible("outside-requests") && (
-            <TabsContent value="outside-requests" className="mt-6">
-              <OutsideAttendanceRequestsTab employees={employees} />
-            </TabsContent>
-          )}
-
-          {visible("staff-accounts") && (
-            <TabsContent value="staff-accounts" className="mt-6">
-              <StaffAccountsTab employees={employees} accounts={staffAccounts} onChange={refresh} />
-            </TabsContent>
-          )}
-
-          {visible("announcements") && (
-            <TabsContent value="announcements" className="mt-6">
-              <AnnouncementsTab />
-            </TabsContent>
-          )}
-
-          {visible("request-categories") && (
-            <TabsContent value="request-categories" className="mt-6">
-              <RequestCategoriesTab />
-            </TabsContent>
-          )}
-
-          {visible("contacts") && (
-            <TabsContent value="contacts" className="mt-6">
-              <ContactListSection />
-            </TabsContent>
-          )}
-
-          {visible("chat") && (
-            <TabsContent value="chat" className="mt-6">
-              {session && (
-                <ChatSection
-                  me={{
-                    type: "admin",
-                    id: session.id,
-                    userId: session.userId,
-                    fullName: session.fullName,
-                  }}
-                />
-              )}
-            </TabsContent>
-          )}
-
-          {visible("payroll") && (
-            <TabsContent value="payroll" className="mt-6">
-              <PayrollTab employees={employees} payrolls={payrolls} onChange={refresh} />
-            </TabsContent>
-          )}
-        </Tabs>
+          <nav className="w-full shrink-0 space-y-5 lg:w-52">
+            {menuGroups.map((group) => (
+              <div key={group.label}>
+                <p className="px-2 text-[0.65rem] font-semibold uppercase tracking-[0.15em] text-muted-foreground">
+                  {group.label}
+                </p>
+                <div className="mt-1.5 space-y-0.5">
+                  {group.items.map((item) => (
+                    <button
+                      key={item.key}
+                      onClick={() => setActiveMenuKey(item.key)}
+                      className={`block w-full rounded-lg px-2.5 py-2 text-left text-sm transition-colors ${
+                        activeMenu === item.key
+                          ? "bg-primary/15 font-medium text-primary"
+                          : "text-muted-foreground hover:bg-muted hover:text-foreground"
+                      }`}
+                    >
+                      {item.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+            ))}
+          </nav>
+        </div>
       )}
     </AppShell>
   );
@@ -330,6 +341,9 @@ const MARITAL_STATUSES: MaritalStatus[] = ["Menikah", "Belum Menikah", "Cerai Hi
 
 const emptyForm = {
   nik: "",
+  nip: "",
+  bpjsHealthNumber: "",
+  bpjsEmploymentNumber: "",
   fullName: "",
   email: "",
   phone: "",
@@ -366,12 +380,16 @@ function EmployeeFormDialog({
   editing,
   employees,
   onSaved,
+  onViewPhotos,
+  onViewMutations,
 }: {
   open: boolean;
   onClose: () => void;
   editing: Employee | null;
   employees: Employee[];
   onSaved: () => void;
+  onViewPhotos?: () => void;
+  onViewMutations?: () => void;
 }) {
   const [form, setForm] = useState(emptyForm);
   const [submitting, setSubmitting] = useState(false);
@@ -391,6 +409,9 @@ function EmployeeFormDialog({
       editing
         ? {
             nik: editing.nik,
+            nip: editing.nip ?? "",
+            bpjsHealthNumber: editing.bpjsHealthNumber ?? "",
+            bpjsEmploymentNumber: editing.bpjsEmploymentNumber ?? "",
             fullName: editing.fullName,
             email: editing.email,
             phone: editing.phone,
@@ -455,6 +476,9 @@ function EmployeeFormDialog({
       };
       const payload = {
         nik: form.nik,
+        ...(form.nip ? { nip: form.nip } : {}),
+        ...(form.bpjsHealthNumber ? { bpjsHealthNumber: form.bpjsHealthNumber } : {}),
+        ...(form.bpjsEmploymentNumber ? { bpjsEmploymentNumber: form.bpjsEmploymentNumber } : {}),
         fullName: form.fullName,
         email: form.email,
         phone: form.phone,
@@ -551,13 +575,38 @@ function EmployeeFormDialog({
             {editing ? "Perbarui data karyawan ini." : "Isi data karyawan baru."}
           </DialogDescription>
         </DialogHeader>
-        <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+        <div className="grid gap-4 sm:grid-cols-2">
           <div>
             <Label>NIK</Label>
             <Input
               className="mt-2"
               value={form.nik}
               onChange={(e) => setForm({ ...form, nik: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>NIP (Nomor Induk Pegawai)</Label>
+            <Input
+              className="mt-2"
+              value={form.nip}
+              onChange={(e) => setForm({ ...form, nip: e.target.value })}
+              placeholder="Nomor internal perusahaan"
+            />
+          </div>
+          <div>
+            <Label>No. BPJS Kesehatan</Label>
+            <Input
+              className="mt-2"
+              value={form.bpjsHealthNumber}
+              onChange={(e) => setForm({ ...form, bpjsHealthNumber: e.target.value })}
+            />
+          </div>
+          <div>
+            <Label>No. BPJS Ketenagakerjaan</Label>
+            <Input
+              className="mt-2"
+              value={form.bpjsEmploymentNumber}
+              onChange={(e) => setForm({ ...form, bpjsEmploymentNumber: e.target.value })}
             />
           </div>
           <div>
@@ -798,7 +847,7 @@ function EmployeeFormDialog({
 
         <div className="mt-2 border-t border-border pt-4">
           <h4 className="text-sm font-semibold">Data Keluarga</h4>
-          <div className="mt-3 grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+          <div className="mt-3 grid gap-4 sm:grid-cols-2">
             <div>
               <Label>Agama</Label>
               <Select
@@ -1020,13 +1069,27 @@ function EmployeeFormDialog({
           </p>
         </div>
 
-        <DialogFooter>
-          <Button variant="outline" onClick={onClose}>
-            Batal
-          </Button>
-          <Button onClick={handleSubmit} disabled={submitting}>
-            {submitting ? "Menyimpan…" : editing ? "Simpan Perubahan" : "Tambah Karyawan"}
-          </Button>
+        <DialogFooter className="sm:justify-between">
+          {editing ? (
+            <div className="flex gap-2">
+              <Button type="button" variant="ghost" size="sm" onClick={onViewPhotos}>
+                <ImageIcon className="size-3.5" /> Foto FaceID/KTP
+              </Button>
+              <Button type="button" variant="ghost" size="sm" onClick={onViewMutations}>
+                <History className="size-3.5" /> Riwayat Mutasi
+              </Button>
+            </div>
+          ) : (
+            <span />
+          )}
+          <div className="flex gap-2">
+            <Button variant="outline" onClick={onClose}>
+              Batal
+            </Button>
+            <Button onClick={handleSubmit} disabled={submitting}>
+              {submitting ? "Menyimpan…" : editing ? "Simpan Perubahan" : "Tambah Karyawan"}
+            </Button>
+          </div>
         </DialogFooter>
       </DialogContent>
     </Dialog>
@@ -1197,6 +1260,8 @@ function EmployeeTab({
   const [deletingBusy, setDeletingBusy] = useState(false);
   const [viewingPhotosFor, setViewingPhotosFor] = useState<Employee | null>(null);
   const [viewingMutationsFor, setViewingMutationsFor] = useState<Employee | null>(null);
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [waDialogPeople, setWaDialogPeople] = useState<Employee[] | null>(null);
 
   const accountByEmployeeId = new Map(accounts.map((a) => [a.employeeId, a]));
 
@@ -1215,9 +1280,110 @@ function EmployeeTab({
     }
   };
 
+  const openEdit = (e: Employee) => {
+    setEditing(e);
+    setFormOpen(true);
+  };
+
+  const toggleSelected = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    setSelectedIds((prev) =>
+      prev.size === employees.length ? new Set() : new Set(employees.map((e) => e.id)),
+    );
+  };
+
+  const selectedEmployees = employees.filter((e) => selectedIds.has(e.id));
+
+  const waLink = (phone: string) => {
+    const digits = phone.replace(/\D/g, "");
+    const intl = digits.startsWith("0") ? `62${digits.slice(1)}` : digits;
+    return `https://wa.me/${intl}`;
+  };
+
+  const handleSendWA = () => {
+    const targets = selectedEmployees.filter((e) => e.phone);
+    if (targets.length === 0) {
+      toast.error("Pilih karyawan yang punya No. HP dulu.");
+      return;
+    }
+    if (targets.length === 1) {
+      window.open(waLink(targets[0]!.phone), "_blank");
+      return;
+    }
+    // WhatsApp tidak punya link broadcast ke banyak nomor sekaligus — tampilkan daftar,
+    // admin klik satu-satu.
+    setWaDialogPeople(targets);
+  };
+
+  const handleSendEmail = () => {
+    const targets = selectedEmployees.filter((e) => e.email);
+    if (targets.length === 0) {
+      toast.error("Pilih karyawan yang punya email dulu.");
+      return;
+    }
+    const addresses = targets.map((e) => e.email).join(",");
+    window.location.href = `mailto:${addresses}`;
+  };
+
+  const handlePrint = () => {
+    const targets = selectedEmployees.length > 0 ? selectedEmployees : employees;
+    const rows = targets
+      .map(
+        (e) => `
+        <tr>
+          <td>${e.fullName}</td>
+          <td>${e.nip || e.nik || "—"}</td>
+          <td>${e.position || "—"}</td>
+          <td>${e.department || "—"}</td>
+          <td>${e.employmentStatus}</td>
+          <td>${e.phone || "—"}</td>
+        </tr>`,
+      )
+      .join("");
+    const win = window.open("", "_blank");
+    if (!win) {
+      toast.error("Izinkan pop-up untuk mencetak.");
+      return;
+    }
+    win.document.write(`
+      <html>
+        <head>
+          <title>Database Karyawan</title>
+          <style>
+            body { font-family: Arial, sans-serif; padding: 24px; }
+            h1 { font-size: 18px; }
+            table { width: 100%; border-collapse: collapse; margin-top: 12px; }
+            th, td { border: 1px solid #ccc; padding: 6px 8px; font-size: 12px; text-align: left; }
+            th { background: #f0f0f0; }
+          </style>
+        </head>
+        <body>
+          <h1>Database Karyawan (${targets.length} orang)</h1>
+          <table>
+            <thead>
+              <tr><th>Nama</th><th>NIP/NIK</th><th>Jabatan</th><th>Departemen</th><th>Status</th><th>No. HP</th></tr>
+            </thead>
+            <tbody>${rows}</tbody>
+          </table>
+        </body>
+      </html>
+    `);
+    win.document.close();
+    win.focus();
+    win.print();
+  };
+
   return (
-    <div className="space-y-6">
-      <div className="flex items-center justify-between">
+    <div className="space-y-4">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-base font-semibold">Database Karyawan</h3>
         <Button
           onClick={() => {
@@ -1229,94 +1395,104 @@ function EmployeeTab({
         </Button>
       </div>
 
+      {selectedIds.size > 0 && (
+        <div className="flex flex-wrap items-center gap-2 rounded-lg border border-primary/30 bg-primary/5 px-4 py-2.5 text-sm">
+          <span className="font-medium">{selectedIds.size} dipilih</span>
+          <Button size="sm" variant="outline" onClick={handleSendWA}>
+            <MessageSquareText className="size-3.5" /> Kirim WA
+          </Button>
+          <Button size="sm" variant="outline" onClick={handleSendEmail}>
+            <Mail className="size-3.5" /> Kirim Email
+          </Button>
+          <Button size="sm" variant="outline" onClick={handlePrint}>
+            <Printer className="size-3.5" /> Cetak PDF
+          </Button>
+          <Button size="sm" variant="ghost" onClick={() => setSelectedIds(new Set())}>
+            Batal Pilih
+          </Button>
+        </div>
+      )}
+
       <section className="glass-panel overflow-hidden">
         {employees.length === 0 ? (
           <p className="p-7 text-sm text-muted-foreground">
             Belum ada karyawan. Tambahkan lewat tombol di atas.
           </p>
         ) : (
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>NIK</TableHead>
-                <TableHead>Nama</TableHead>
-                <TableHead>Departemen</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>PTKP</TableHead>
-                <TableHead>Level</TableHead>
-                <TableHead>FaceID</TableHead>
-                <TableHead />
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {employees.map((e) => (
-                <TableRow key={e.id}>
-                  <TableCell className="font-mono text-xs">{e.nik || "—"}</TableCell>
-                  <TableCell>{e.fullName}</TableCell>
-                  <TableCell>{e.department}</TableCell>
-                  <TableCell>
-                    <Badge variant="secondary">{e.employmentStatus}</Badge>
-                  </TableCell>
-                  <TableCell className="font-mono text-xs">{e.ptkpStatus}</TableCell>
-                  <TableCell className="text-xs">{e.positionLevel}</TableCell>
-                  <TableCell>
-                    {e.faceDescriptor ? (
-                      <Badge className="gap-1 bg-primary/15 text-primary" variant="secondary">
-                        <ScanFace className="size-3" /> Terdaftar
-                      </Badge>
-                    ) : (
-                      <span className="text-xs text-muted-foreground">Belum</span>
-                    )}
-                  </TableCell>
-                  <TableCell>
-                    <div className="flex gap-1.5">
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        title="Lihat foto FaceID & KTP"
-                        onClick={() => setViewingPhotosFor(e)}
-                      >
-                        <ImageIcon className="size-3.5" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        title="Riwayat Mutasi"
-                        onClick={() => setViewingMutationsFor(e)}
-                      >
-                        <History className="size-3.5" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        title="Edit"
-                        onClick={() => {
-                          setEditing(e);
-                          setFormOpen(true);
-                        }}
-                      >
-                        <Pencil className="size-3.5" />
-                      </Button>
-                      <Button
-                        size="sm"
-                        variant="outline"
-                        title="Hapus"
-                        onClick={() => setDeleting(e)}
-                      >
-                        <Trash2 className="size-3.5" />
-                      </Button>
-                    </div>
-                  </TableCell>
+          <>
+            <div className="flex items-center justify-between border-b border-border px-4 py-2">
+              <Button size="sm" variant="ghost" onClick={handlePrint}>
+                <Printer className="size-3.5" /> Cetak Semua ({employees.length})
+              </Button>
+            </div>
+            <Table>
+              <TableHeader>
+                <TableRow>
+                  <TableHead className="w-8">
+                    <input
+                      type="checkbox"
+                      checked={selectedIds.size === employees.length}
+                      onChange={toggleSelectAll}
+                    />
+                  </TableHead>
+                  <TableHead>Nama</TableHead>
+                  <TableHead>NIP/NIK</TableHead>
+                  <TableHead>Jabatan</TableHead>
+                  <TableHead>Departemen</TableHead>
+                  <TableHead>Status</TableHead>
+                  <TableHead />
                 </TableRow>
-              ))}
-            </TableBody>
-          </Table>
+              </TableHeader>
+              <TableBody>
+                {employees.map((e) => (
+                  <TableRow key={e.id} className="cursor-pointer" onDoubleClick={() => openEdit(e)}>
+                    <TableCell onClick={(ev) => ev.stopPropagation()}>
+                      <input
+                        type="checkbox"
+                        checked={selectedIds.has(e.id)}
+                        onChange={() => toggleSelected(e.id)}
+                      />
+                    </TableCell>
+                    <TableCell onClick={() => openEdit(e)}>{e.fullName}</TableCell>
+                    <TableCell className="font-mono text-xs" onClick={() => openEdit(e)}>
+                      {e.nip || e.nik || "—"}
+                    </TableCell>
+                    <TableCell onClick={() => openEdit(e)}>{e.position || "—"}</TableCell>
+                    <TableCell onClick={() => openEdit(e)}>{e.department || "—"}</TableCell>
+                    <TableCell onClick={() => openEdit(e)}>
+                      <Badge variant="secondary">{e.employmentStatus}</Badge>
+                    </TableCell>
+                    <TableCell>
+                      <div className="flex gap-1.5">
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Edit"
+                          onClick={() => openEdit(e)}
+                        >
+                          <Pencil className="size-3.5" />
+                        </Button>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          title="Hapus"
+                          onClick={() => setDeleting(e)}
+                        >
+                          <Trash2 className="size-3.5" />
+                        </Button>
+                      </div>
+                    </TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </>
         )}
       </section>
       <p className="text-xs text-muted-foreground">
-        FaceID hanya bisa didaftarkan oleh staff sendiri, di HP mereka, saat login pertama (menu{" "}
-        <strong>Akun Staff</strong> untuk membuatkan akunnya). Admin tidak bisa mendaftarkan wajah
-        karyawan dari sini.
+        Klik dua kali baris (atau tombol Edit) untuk lihat/ubah detail lengkap — termasuk foto
+        FaceID/KTP dan riwayat mutasi. FaceID hanya bisa didaftarkan oleh staff sendiri dari HP
+        mereka, admin tidak bisa mendaftarkan wajah karyawan dari sini.
       </p>
 
       <EmployeeFormDialog
@@ -1325,6 +1501,8 @@ function EmployeeTab({
         employees={employees}
         onClose={() => setFormOpen(false)}
         onSaved={onChange}
+        onViewPhotos={() => editing && setViewingPhotosFor(editing)}
+        onViewMutations={() => editing && setViewingMutationsFor(editing)}
       />
 
       {viewingPhotosFor && (
@@ -1341,6 +1519,32 @@ function EmployeeTab({
           onClose={() => setViewingMutationsFor(null)}
         />
       )}
+
+      <Dialog open={!!waDialogPeople} onOpenChange={(v) => !v && setWaDialogPeople(null)}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Kirim WhatsApp</DialogTitle>
+            <DialogDescription>
+              WhatsApp tidak punya kirim-massal lewat link — klik tiap nama untuk buka chat-nya.
+            </DialogDescription>
+          </DialogHeader>
+          <ul className="space-y-2">
+            {waDialogPeople?.map((e) => (
+              <li key={e.id}>
+                <a
+                  href={waLink(e.phone)}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="flex items-center justify-between rounded-lg border border-border p-3 text-sm hover:border-primary/40"
+                >
+                  {e.fullName}
+                  <span className="font-mono text-xs text-muted-foreground">{e.phone}</span>
+                </a>
+              </li>
+            ))}
+          </ul>
+        </DialogContent>
+      </Dialog>
 
       <AlertDialog open={!!deleting} onOpenChange={(v) => !v && setDeleting(null)}>
         <AlertDialogContent>
