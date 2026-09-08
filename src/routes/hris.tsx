@@ -115,6 +115,12 @@ import {
 } from "@/lib/outside-attendance-data";
 import { getMenuPermissions, isMenuAllowed, type PermissionMap } from "@/lib/menu-permissions-data";
 import {
+  getRequestCategories,
+  addRequestCategory,
+  deleteRequestCategory,
+  type RequestCategory,
+} from "@/lib/leave-data";
+import {
   getStaffAccounts,
   createStaffAccount,
   resetStaffAccountToDefaultPin,
@@ -226,6 +232,9 @@ function HrisPage() {
             {visible("announcements") && (
               <TabsTrigger value="announcements">Pengumuman</TabsTrigger>
             )}
+            {visible("request-categories") && (
+              <TabsTrigger value="request-categories">Kategori Pengajuan</TabsTrigger>
+            )}
             {visible("contacts") && <TabsTrigger value="contacts">Contact List</TabsTrigger>}
             {visible("chat") && <TabsTrigger value="chat">Chat</TabsTrigger>}
             {visible("payroll") && <TabsTrigger value="payroll">Payroll</TabsTrigger>}
@@ -276,6 +285,12 @@ function HrisPage() {
           {visible("announcements") && (
             <TabsContent value="announcements" className="mt-6">
               <AnnouncementsTab />
+            </TabsContent>
+          )}
+
+          {visible("request-categories") && (
+            <TabsContent value="request-categories" className="mt-6">
+              <RequestCategoriesTab />
             </TabsContent>
           )}
 
@@ -1962,6 +1977,92 @@ function AnnouncementsTab() {
                   </p>
                 </div>
                 <Button size="sm" variant="outline" onClick={() => handleDelete(a.id)}>
+                  <Trash2 className="size-3.5" />
+                </Button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+    </div>
+  );
+}
+
+function RequestCategoriesTab() {
+  const [items, setItems] = useState<RequestCategory[]>([]);
+  const [loading, setLoading] = useState(true);
+  const [name, setName] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+
+  const refresh = () => {
+    setLoading(true);
+    getRequestCategories()
+      .then(setItems)
+      .catch(() => toast.error("Gagal memuat kategori pengajuan."))
+      .finally(() => setLoading(false));
+  };
+
+  useEffect(refresh, []);
+
+  const handleAdd = async () => {
+    if (!name.trim()) {
+      toast.error("Nama kategori wajib diisi.");
+      return;
+    }
+    setSubmitting(true);
+    try {
+      await addRequestCategory(name.trim());
+      toast.success("Kategori ditambahkan — langsung muncul di form Ajukan staff.");
+      setName("");
+      refresh();
+    } catch {
+      toast.error("Gagal menambahkan. Mungkin nama itu sudah ada.");
+    } finally {
+      setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async (id: string) => {
+    try {
+      await deleteRequestCategory(id);
+      toast.success("Kategori dihapus.");
+      refresh();
+    } catch {
+      toast.error("Gagal menghapus. Coba lagi.");
+    }
+  };
+
+  return (
+    <div className="space-y-6">
+      <section className="glass-panel p-7">
+        <h3 className="text-base font-semibold">Kategori Pengajuan Cuti/Izin</h3>
+        <p className="mt-1 text-sm text-muted-foreground">
+          Ditampilkan sebagai pilihan di form Ajukan staff — tidak cuma Cuti/Sakit, tambahkan yang
+          dianggap penting seperti "Absen Diluar" atau "Gagal Absen".
+        </p>
+        <div className="mt-4 flex gap-2">
+          <Input
+            value={name}
+            onChange={(e) => setName(e.target.value)}
+            placeholder="Nama kategori baru"
+          />
+          <Button onClick={handleAdd} disabled={submitting}>
+            <UserPlus className="size-4" /> Tambah
+          </Button>
+        </div>
+      </section>
+
+      <section className="glass-panel overflow-hidden">
+        {loading ? (
+          <p className="p-7 text-sm text-muted-foreground">Memuat…</p>
+        ) : items.length === 0 ? (
+          <p className="p-7 text-sm text-muted-foreground">Belum ada kategori.</p>
+        ) : (
+          <ul className="divide-y divide-border">
+            {items.map((c) => (
+              <li key={c.id} className="flex items-center justify-between p-4">
+                <span className="font-medium">{c.name}</span>
+                <Button size="sm" variant="outline" onClick={() => handleDelete(c.id)}>
                   <Trash2 className="size-3.5" />
                 </Button>
               </li>

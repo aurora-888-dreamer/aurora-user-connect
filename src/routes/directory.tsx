@@ -13,7 +13,10 @@ export const Route = createFileRoute("/directory")({
         content: "Directory of every Aurora user_id account registered on this workspace.",
       },
       { property: "og:title", content: "User ID Directory — Human Power Management" },
-      { property: "og:description", content: "Every registered user_id, role and WA/HP contact." },
+      {
+        property: "og:description",
+        content: "Every registered user_id, department, position and WA/HP contact.",
+      },
     ],
   }),
   component: DirectoryPage,
@@ -40,7 +43,7 @@ function DirectoryPage() {
   return (
     <AppShell
       title="User ID Directory"
-      description="Semua akun User ID yang terdaftar di workspace ini, beserta role dan kontak WhatsApp/HP."
+      description="Semua akun User ID yang terdaftar di workspace ini, beserta departemen, jabatan, dan kontak WhatsApp/HP."
     >
       <section className="glass-panel overflow-hidden">
         {rows.length === 0 ? (
@@ -51,7 +54,8 @@ function DirectoryPage() {
               <tr>
                 <th className="px-6 py-4">user_id</th>
                 <th className="px-6 py-4">Nama</th>
-                <th className="px-6 py-4">Role</th>
+                <th className="px-6 py-4">Departemen</th>
+                <th className="px-6 py-4">Jabatan</th>
                 <th className="px-6 py-4">WA / HP</th>
               </tr>
             </thead>
@@ -61,8 +65,9 @@ function DirectoryPage() {
                   <td className="px-6 py-4 font-mono text-primary">{r.userId}</td>
                   <td className="px-6 py-4">{r.fullName}</td>
                   <td className="px-6 py-4">
-                    <Badge variant="secondary">{r.role}</Badge>
+                    {r.department ? <Badge variant="secondary">{r.department}</Badge> : "—"}
                   </td>
+                  <td className="px-6 py-4">{r.position || "—"}</td>
                   <td className="px-6 py-4 font-mono text-muted-foreground">{r.phoneWA || "—"}</td>
                 </tr>
               ))}
