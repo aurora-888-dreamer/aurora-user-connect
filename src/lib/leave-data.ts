@@ -1,15 +1,48 @@
 import { supabase } from "@/integrations/supabase/client";
 import { getOrCreateCompanyId } from "@/lib/company-data";
 
-export type ReasonCategory = "Sakit" | "Keperluan Keluarga" | "Cuti Tahunan" | "Lainnya";
+/** Kept as a plain string now — the actual list is configured by HRIS (see getRequestCategories below), not fixed in code. */
+export type ReasonCategory = string;
 export type LeaveStatus = "PENDING" | "APPROVED" | "REJECTED";
 
-export const REASON_CATEGORIES: ReasonCategory[] = [
-  "Sakit",
-  "Keperluan Keluarga",
-  "Cuti Tahunan",
-  "Lainnya",
-];
+const DEFAULT_REQUEST_CATEGORIES = ["Sakit", "Keperluan Keluarga", "Cuti Tahunan", "Lainnya"];
+
+export type RequestCategory = { id: string; name: string };
+
+/** Auto-seeds the 4 starting categories the first time this is called for a company — HRIS can rename, add (e.g. "Absen Diluar", "Gagal Absen"), or remove freely afterward. */
+export async function getRequestCategories(): Promise<RequestCategory[]> {
+  const companyId = await getOrCreateCompanyId();
+  const { data, error } = await supabase
+    .from("hpm_request_categories")
+    .select("id, name")
+    .eq("company_id", companyId)
+    .order("created_at", { ascending: true });
+  if (error) throw error;
+  if (data.length > 0) return data;
+
+  const { data: seeded, error: seedError } = await supabase
+    .from("hpm_request_categories")
+    .insert(DEFAULT_REQUEST_CATEGORIES.map((name) => ({ company_id: companyId, name })))
+    .select("id, name");
+  if (seedError) throw seedError;
+  return seeded;
+}
+
+export async function addRequestCategory(name: string): Promise<RequestCategory> {
+  const companyId = await getOrCreateCompanyId();
+  const { data, error } = await supabase
+    .from("hpm_request_categories")
+    .insert({ company_id: companyId, name })
+    .select("id, name")
+    .single();
+  if (error) throw error;
+  return data;
+}
+
+export async function deleteRequestCategory(id: string): Promise<void> {
+  const { error } = await supabase.from("hpm_request_categories").delete().eq("id", id);
+  if (error) throw error;
+}
 
 export type LeaveRequest = {
   id: string;

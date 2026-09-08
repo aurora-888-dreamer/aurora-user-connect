@@ -17,6 +17,7 @@ export const MODULE_MENUS: Record<PermissionModule, { key: string; label: string
     { key: "outside-requests", label: "Pengajuan Absensi Luar" },
     { key: "staff-accounts", label: "Akun Staff" },
     { key: "announcements", label: "Pengumuman" },
+    { key: "request-categories", label: "Kategori Pengajuan" },
     { key: "contacts", label: "Contact List" },
     { key: "chat", label: "Chat" },
     { key: "payroll", label: "Payroll" },
