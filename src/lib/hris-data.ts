@@ -83,6 +83,8 @@ export type Employee = {
   shiftTypeId?: string;
   employmentStatus: EmploymentStatus;
   joinDate: string;
+  contractEndDate?: string | undefined;
+  resignDate?: string | undefined;
   npwp: string;
   ptkpStatus: PtkpStatus;
   basicSalary?: number;
@@ -190,6 +192,8 @@ type EmployeeRow = {
   shift_type_id: string | null;
   employment_status: string;
   join_date: string | null;
+  contract_end_date: string | null;
+  resign_date: string | null;
   npwp: string | null;
   ptkp_status: string | null;
   basic_salary: number;
@@ -232,6 +236,8 @@ function toEmployee(row: EmployeeRow): Employee {
     ...(row.shift_type_id ? { shiftTypeId: row.shift_type_id } : {}),
     employmentStatus: (row.employment_status as EmploymentStatus) ?? "PKWT",
     joinDate: row.join_date ?? "",
+    ...(row.contract_end_date ? { contractEndDate: row.contract_end_date } : {}),
+    ...(row.resign_date ? { resignDate: row.resign_date } : {}),
     npwp: row.npwp ?? "",
     ptkpStatus: (row.ptkp_status as PtkpStatus) ?? "TK/0",
     basicSalary: row.basic_salary,
@@ -257,7 +263,7 @@ function toEmployee(row: EmployeeRow): Employee {
 }
 
 const EMPLOYEE_COLUMNS =
-  "id, nik, nip, bpjs_health_number, bpjs_employment_number, full_name, email, phone, department, position, rank, position_level, blood_type, date_of_birth, location_id, shift_type_id, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, performance_bonus, created_at";
+  "id, nik, nip, bpjs_health_number, bpjs_employment_number, full_name, email, phone, department, position, rank, position_level, blood_type, date_of_birth, location_id, shift_type_id, employment_status, join_date, contract_end_date, resign_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, performance_bonus, created_at";
 
 export async function getEmployees(): Promise<Employee[]> {
   const companyId = await getOrCreateCompanyId();
@@ -328,6 +334,8 @@ export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Pr
       shift_type_id: input.shiftTypeId || null,
       employment_status: input.employmentStatus,
       join_date: input.joinDate || null,
+      contract_end_date: input.contractEndDate || null,
+      resign_date: input.resignDate || null,
       npwp: input.npwp || null,
       ptkp_status: input.ptkpStatus,
       basic_salary: input.basicSalary || 0,
@@ -359,6 +367,8 @@ export async function updateEmployee(id: string, patch: Partial<Employee>): Prom
   if (patch.bpjsHealthNumber !== undefined) dbPatch.bpjs_health_number = patch.bpjsHealthNumber;
   if (patch.bpjsEmploymentNumber !== undefined)
     dbPatch.bpjs_employment_number = patch.bpjsEmploymentNumber;
+  if (patch.contractEndDate !== undefined) dbPatch.contract_end_date = patch.contractEndDate || null;
+  if (patch.resignDate !== undefined) dbPatch.resign_date = patch.resignDate || null;
   if (patch.fullName !== undefined) dbPatch.full_name = patch.fullName;
   if (patch.email !== undefined) dbPatch.email = patch.email;
   if (patch.phone !== undefined) dbPatch.phone = patch.phone;

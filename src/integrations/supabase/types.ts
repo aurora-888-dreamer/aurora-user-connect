@@ -190,15 +190,20 @@ export type Database = {
           company_id: string
           date: string
           distance_meters: number | null
+          distance_out_meters: number | null
           employee_id: string
           id: string
           is_outside_office: boolean | null
+          is_outside_office_out: boolean | null
           lat_in: string | null
+          lat_out: string | null
           late_in_reason: string | null
           late_out_reason: string | null
           long_in: string | null
+          long_out: string | null
           needs_supervisor_approval: boolean
           outside_location_note: string | null
+          outside_location_note_out: string | null
           outside_task_status: string | null
           photo_url: string | null
           status: string | null
@@ -209,15 +214,20 @@ export type Database = {
           company_id: string
           date: string
           distance_meters?: number | null
+          distance_out_meters?: number | null
           employee_id: string
           id?: string
           is_outside_office?: boolean | null
+          is_outside_office_out?: boolean | null
           lat_in?: string | null
+          lat_out?: string | null
           late_in_reason?: string | null
           late_out_reason?: string | null
           long_in?: string | null
+          long_out?: string | null
           needs_supervisor_approval?: boolean
           outside_location_note?: string | null
+          outside_location_note_out?: string | null
           outside_task_status?: string | null
           photo_url?: string | null
           status?: string | null
@@ -228,15 +238,20 @@ export type Database = {
           company_id?: string
           date?: string
           distance_meters?: number | null
+          distance_out_meters?: number | null
           employee_id?: string
           id?: string
           is_outside_office?: boolean | null
+          is_outside_office_out?: boolean | null
           lat_in?: string | null
+          lat_out?: string | null
           late_in_reason?: string | null
           late_out_reason?: string | null
           long_in?: string | null
+          long_out?: string | null
           needs_supervisor_approval?: boolean
           outside_location_note?: string | null
+          outside_location_note_out?: string | null
           outside_task_status?: string | null
           photo_url?: string | null
           status?: string | null
@@ -381,6 +396,7 @@ export type Database = {
       hpm_companies: {
         Row: {
           address: string | null
+          allow_outside_attendance: boolean
           created_at: string
           email: string | null
           id: string
@@ -405,6 +421,7 @@ export type Database = {
         }
         Insert: {
           address?: string | null
+          allow_outside_attendance?: boolean
           created_at?: string
           email?: string | null
           id?: string
@@ -429,6 +446,7 @@ export type Database = {
         }
         Update: {
           address?: string | null
+          allow_outside_attendance?: boolean
           created_at?: string
           email?: string | null
           id?: string
