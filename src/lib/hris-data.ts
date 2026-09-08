@@ -67,6 +67,9 @@ export type FamilyData = {
 export type Employee = {
   id: string;
   nik: string;
+  nip?: string;
+  bpjsHealthNumber?: string;
+  bpjsEmploymentNumber?: string;
   fullName: string;
   email: string;
   phone: string;
@@ -114,6 +117,11 @@ export type AttendanceRecord = {
   isOutsideOffice?: boolean | undefined;
   outsideLocationNote?: string | undefined;
   outsideTaskStatus?: string | undefined;
+  latOut?: string | undefined;
+  longOut?: string | undefined;
+  distanceOutMeters?: number | undefined;
+  isOutsideOfficeOut?: boolean | undefined;
+  outsideLocationNoteOut?: string | undefined;
   photoDataUrl?: string | undefined;
   lateInReason?: string | undefined;
   lateOutReason?: string | undefined;
@@ -166,6 +174,9 @@ function write<T>(key: string, rows: T[]) {
 type EmployeeRow = {
   id: string;
   nik: string | null;
+  nip: string | null;
+  bpjs_health_number: string | null;
+  bpjs_employment_number: string | null;
   full_name: string;
   email: string | null;
   phone: string | null;
@@ -203,6 +214,9 @@ function toEmployee(row: EmployeeRow): Employee {
   return {
     id: row.id,
     nik: row.nik ?? "",
+    ...(row.nip ? { nip: row.nip } : {}),
+    ...(row.bpjs_health_number ? { bpjsHealthNumber: row.bpjs_health_number } : {}),
+    ...(row.bpjs_employment_number ? { bpjsEmploymentNumber: row.bpjs_employment_number } : {}),
     fullName: row.full_name,
     email: row.email ?? "",
     phone: row.phone ?? "",
@@ -243,7 +257,7 @@ function toEmployee(row: EmployeeRow): Employee {
 }
 
 const EMPLOYEE_COLUMNS =
-  "id, nik, full_name, email, phone, department, position, rank, position_level, blood_type, date_of_birth, location_id, shift_type_id, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, performance_bonus, created_at";
+  "id, nik, nip, bpjs_health_number, bpjs_employment_number, full_name, email, phone, department, position, rank, position_level, blood_type, date_of_birth, location_id, shift_type_id, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, performance_bonus, created_at";
 
 export async function getEmployees(): Promise<Employee[]> {
   const companyId = await getOrCreateCompanyId();
@@ -298,6 +312,9 @@ export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Pr
     .insert({
       company_id: companyId,
       nik: input.nik || null,
+      nip: input.nip || null,
+      bpjs_health_number: input.bpjsHealthNumber || null,
+      bpjs_employment_number: input.bpjsEmploymentNumber || null,
       full_name: input.fullName,
       email: input.email || null,
       phone: input.phone || null,
@@ -338,6 +355,10 @@ export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Pr
 export async function updateEmployee(id: string, patch: Partial<Employee>): Promise<void> {
   const dbPatch: Database["public"]["Tables"]["hpm_employees"]["Update"] = {};
   if (patch.nik !== undefined) dbPatch.nik = patch.nik;
+  if (patch.nip !== undefined) dbPatch.nip = patch.nip;
+  if (patch.bpjsHealthNumber !== undefined) dbPatch.bpjs_health_number = patch.bpjsHealthNumber;
+  if (patch.bpjsEmploymentNumber !== undefined)
+    dbPatch.bpjs_employment_number = patch.bpjsEmploymentNumber;
   if (patch.fullName !== undefined) dbPatch.full_name = patch.fullName;
   if (patch.email !== undefined) dbPatch.email = patch.email;
   if (patch.phone !== undefined) dbPatch.phone = patch.phone;
@@ -797,6 +818,11 @@ type AttendanceRow = {
   is_outside_office: boolean | null;
   outside_location_note: string | null;
   outside_task_status: string | null;
+  lat_out: string | null;
+  long_out: string | null;
+  distance_out_meters: number | null;
+  is_outside_office_out: boolean | null;
+  outside_location_note_out: string | null;
   photo_url: string | null;
   late_in_reason: string | null;
   late_out_reason: string | null;
@@ -817,6 +843,11 @@ function toAttendance(row: AttendanceRow): AttendanceRecord {
     isOutsideOffice: row.is_outside_office ?? undefined,
     outsideLocationNote: row.outside_location_note ?? undefined,
     outsideTaskStatus: row.outside_task_status ?? undefined,
+    latOut: row.lat_out ?? undefined,
+    longOut: row.long_out ?? undefined,
+    distanceOutMeters: row.distance_out_meters ?? undefined,
+    isOutsideOfficeOut: row.is_outside_office_out ?? undefined,
+    outsideLocationNoteOut: row.outside_location_note_out ?? undefined,
     photoDataUrl: row.photo_url ?? undefined,
     lateInReason: row.late_in_reason ?? undefined,
     lateOutReason: row.late_out_reason ?? undefined,
@@ -826,7 +857,7 @@ function toAttendance(row: AttendanceRow): AttendanceRecord {
 }
 
 const ATTENDANCE_COLUMNS =
-  "id, employee_id, date, clock_in, clock_out, lat_in, long_in, distance_meters, is_outside_office, outside_location_note, outside_task_status, photo_url, late_in_reason, late_out_reason, needs_supervisor_approval, status";
+  "id, employee_id, date, clock_in, clock_out, lat_in, long_in, distance_meters, is_outside_office, outside_location_note, outside_task_status, lat_out, long_out, distance_out_meters, is_outside_office_out, outside_location_note_out, photo_url, late_in_reason, late_out_reason, needs_supervisor_approval, status";
 
 export async function getAttendance(): Promise<AttendanceRecord[]> {
   const companyId = await getOrCreateCompanyId();
@@ -1015,29 +1046,28 @@ export async function clockIn(
 
 export async function clockOut(
   employeeId: string,
-  input?:
-    | string
-    | {
-        lateOutReason?: string;
-        coords?: { lat: string; long: string };
-        distanceMeters?: number;
-        isOutsideOffice?: boolean;
-        outsideLocationNote?: string;
-        outsideTaskStatus?: string;
-        photoDataUrl?: string;
-      },
+  input?: {
+    lateOutReason?: string;
+    coords?: { lat: string; long: string };
+    distanceMeters?: number;
+    isOutsideOffice?: boolean;
+    outsideLocationNote?: string;
+  },
 ): Promise<void> {
-  const opts = typeof input === "string" ? { lateOutReason: input } : (input ?? {});
   const today = new Date().toISOString().slice(0, 10);
   const { error } = await supabase
     .from("hpm_attendance")
     .update({
       clock_out: new Date().toISOString(),
-      ...(opts.lateOutReason ? { late_out_reason: opts.lateOutReason } : {}),
-      ...(opts.distanceMeters !== undefined ? { distance_meters: opts.distanceMeters } : {}),
-      ...(opts.isOutsideOffice !== undefined ? { is_outside_office: opts.isOutsideOffice } : {}),
-      ...(opts.outsideLocationNote ? { outside_location_note: opts.outsideLocationNote } : {}),
-      ...(opts.outsideTaskStatus ? { outside_task_status: opts.outsideTaskStatus } : {}),
+      ...(input?.lateOutReason ? { late_out_reason: input.lateOutReason } : {}),
+      ...(input?.coords ? { lat_out: input.coords.lat, long_out: input.coords.long } : {}),
+      ...(input?.distanceMeters !== undefined ? { distance_out_meters: input.distanceMeters } : {}),
+      ...(input?.isOutsideOffice !== undefined
+        ? { is_outside_office_out: input.isOutsideOffice }
+        : {}),
+      ...(input?.outsideLocationNote
+        ? { outside_location_note_out: input.outsideLocationNote }
+        : {}),
     })
     .eq("employee_id", employeeId)
     .eq("date", today)
