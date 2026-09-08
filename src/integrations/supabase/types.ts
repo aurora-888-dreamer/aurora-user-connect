@@ -393,6 +393,10 @@ export type Database = {
           work_start_time: string;
           work_end_time: string;
           payroll_cutoff_day: number;
+          org_type: string | null;
+          job_level_enabled: boolean;
+          rank_grade_enabled: boolean;
+          salary_grade_enabled: boolean;
           allow_outside_attendance: boolean;
           pension_years_multiplier: number;
           pension_constant: number;
@@ -414,6 +418,10 @@ export type Database = {
           work_start_time?: string;
           work_end_time?: string;
           payroll_cutoff_day?: number;
+          org_type?: string | null;
+          job_level_enabled?: boolean;
+          rank_grade_enabled?: boolean;
+          salary_grade_enabled?: boolean;
           allow_outside_attendance?: boolean;
           pension_years_multiplier?: number;
           pension_constant?: number;
@@ -435,6 +443,10 @@ export type Database = {
           work_start_time?: string;
           work_end_time?: string;
           payroll_cutoff_day?: number;
+          org_type?: string | null;
+          job_level_enabled?: boolean;
+          rank_grade_enabled?: boolean;
+          salary_grade_enabled?: boolean;
           allow_outside_attendance?: boolean;
           pension_years_multiplier?: number;
           pension_constant?: number;
@@ -507,6 +519,9 @@ export type Database = {
           nip: string | null;
           bpjs_health_number: string | null;
           bpjs_employment_number: string | null;
+          position_id: string | null;
+          rank_id: string | null;
+          salary_grade_id: string | null;
           npwp: string | null;
           phone: string | null;
           ptkp_status: string | null;
@@ -546,6 +561,9 @@ export type Database = {
           nip?: string | null;
           bpjs_health_number?: string | null;
           bpjs_employment_number?: string | null;
+          position_id?: string | null;
+          rank_id?: string | null;
+          salary_grade_id?: string | null;
           npwp?: string | null;
           phone?: string | null;
           ptkp_status?: string | null;
@@ -585,6 +603,9 @@ export type Database = {
           nip?: string | null;
           bpjs_health_number?: string | null;
           bpjs_employment_number?: string | null;
+          position_id?: string | null;
+          rank_id?: string | null;
+          salary_grade_id?: string | null;
           npwp?: string | null;
           phone?: string | null;
           ptkp_status?: string | null;
@@ -949,6 +970,168 @@ export type Database = {
             referencedColumns: ["id"];
           },
         ];
+      };
+      hpm_org_units: {
+        Row: {
+          id: string;
+          company_id: string;
+          parent_unit_id: string | null;
+          name: string;
+          order_index: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          parent_unit_id?: string | null;
+          name: string;
+          order_index?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          parent_unit_id?: string | null;
+          name?: string;
+          order_index?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hpm_org_units_parent_unit_id_fkey";
+            columns: ["parent_unit_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_org_units";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      hpm_job_levels: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          level_order: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          level_order?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          name?: string;
+          level_order?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      hpm_positions: {
+        Row: {
+          id: string;
+          company_id: string;
+          org_unit_id: string;
+          name: string;
+          job_level_id: string | null;
+          reports_to_position_id: string | null;
+          order_index: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          org_unit_id: string;
+          name: string;
+          job_level_id?: string | null;
+          reports_to_position_id?: string | null;
+          order_index?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          org_unit_id?: string;
+          name?: string;
+          job_level_id?: string | null;
+          reports_to_position_id?: string | null;
+          order_index?: number;
+          created_at?: string;
+        };
+        Relationships: [
+          {
+            foreignKeyName: "hpm_positions_org_unit_id_fkey";
+            columns: ["org_unit_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_org_units";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "hpm_positions_job_level_id_fkey";
+            columns: ["job_level_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_job_levels";
+            referencedColumns: ["id"];
+          },
+          {
+            foreignKeyName: "hpm_positions_reports_to_position_id_fkey";
+            columns: ["reports_to_position_id"];
+            isOneToOne: false;
+            referencedRelation: "hpm_positions";
+            referencedColumns: ["id"];
+          },
+        ];
+      };
+      hpm_ranks: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          order_index: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          order_index?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          name?: string;
+          order_index?: number;
+          created_at?: string;
+        };
+        Relationships: [];
+      };
+      hpm_salary_grades: {
+        Row: {
+          id: string;
+          company_id: string;
+          name: string;
+          order_index: number;
+          created_at: string;
+        };
+        Insert: {
+          id?: string;
+          company_id: string;
+          name: string;
+          order_index?: number;
+          created_at?: string;
+        };
+        Update: {
+          id?: string;
+          company_id?: string;
+          name?: string;
+          order_index?: number;
+          created_at?: string;
+        };
+        Relationships: [];
       };
       hpm_otp_codes: {
         Row: {
