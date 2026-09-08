@@ -13,7 +13,7 @@ import { getOrCreateCompanyId, getCompanyProfile } from "@/lib/company-data";
 export type EmploymentStatus = "PKWT" | "PKWTT" | "INTERN";
 export type PtkpStatus = "TK/0" | "TK/1" | "TK/2" | "TK/3" | "K/0" | "K/1" | "K/2" | "K/3";
 export type AttendanceStatus = "PRESENT" | "LATE" | "LEAVE" | "ALPHA";
-export type PayrollStatus = "DRAFT" | "PAID";
+export type PayrollStatus = "DRAFT" | "PENDING_APPROVAL" | "APPROVED" | "PAID";
 
 export type MaritalStatus = "Menikah" | "Belum Menikah" | "Cerai Hidup" | "Cerai Mati";
 
@@ -79,12 +79,12 @@ export type Employee = {
   positionLevel: PositionLevel;
   bloodType?: BloodType;
   dateOfBirth?: string;
+  contractEndDate?: string;
+  resignDate?: string;
   locationId?: string;
   shiftTypeId?: string;
   employmentStatus: EmploymentStatus;
   joinDate: string;
-  contractEndDate?: string | undefined;
-  resignDate?: string | undefined;
   npwp: string;
   ptkpStatus: PtkpStatus;
   basicSalary?: number;
@@ -188,12 +188,12 @@ type EmployeeRow = {
   position_level: string;
   blood_type: string | null;
   date_of_birth: string | null;
+  contract_end_date: string | null;
+  resign_date: string | null;
   location_id: string | null;
   shift_type_id: string | null;
   employment_status: string;
   join_date: string | null;
-  contract_end_date: string | null;
-  resign_date: string | null;
   npwp: string | null;
   ptkp_status: string | null;
   basic_salary: number;
@@ -232,12 +232,12 @@ function toEmployee(row: EmployeeRow): Employee {
       ? { bloodType: row.blood_type as BloodType }
       : {}),
     ...(row.date_of_birth ? { dateOfBirth: row.date_of_birth } : {}),
+    ...(row.contract_end_date ? { contractEndDate: row.contract_end_date } : {}),
+    ...(row.resign_date ? { resignDate: row.resign_date } : {}),
     ...(row.location_id ? { locationId: row.location_id } : {}),
     ...(row.shift_type_id ? { shiftTypeId: row.shift_type_id } : {}),
     employmentStatus: (row.employment_status as EmploymentStatus) ?? "PKWT",
     joinDate: row.join_date ?? "",
-    ...(row.contract_end_date ? { contractEndDate: row.contract_end_date } : {}),
-    ...(row.resign_date ? { resignDate: row.resign_date } : {}),
     npwp: row.npwp ?? "",
     ptkpStatus: (row.ptkp_status as PtkpStatus) ?? "TK/0",
     basicSalary: row.basic_salary,
@@ -263,7 +263,7 @@ function toEmployee(row: EmployeeRow): Employee {
 }
 
 const EMPLOYEE_COLUMNS =
-  "id, nik, nip, bpjs_health_number, bpjs_employment_number, full_name, email, phone, department, position, rank, position_level, blood_type, date_of_birth, location_id, shift_type_id, employment_status, join_date, contract_end_date, resign_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, performance_bonus, created_at";
+  "id, nik, nip, bpjs_health_number, bpjs_employment_number, full_name, email, phone, department, position, rank, position_level, blood_type, date_of_birth, contract_end_date, resign_date, location_id, shift_type_id, employment_status, join_date, npwp, ptkp_status, basic_salary, is_active, source, family_data, supervisor_id, bank_name, bank_account_number, bank_account_holder, transport_allowance, meal_allowance, position_allowance, health_allowance, insurance_allowance, overtime_rate_per_hour, performance_bonus, created_at";
 
 export async function getEmployees(): Promise<Employee[]> {
   const companyId = await getOrCreateCompanyId();
@@ -330,12 +330,12 @@ export async function addEmployee(input: Omit<Employee, "id" | "createdAt">): Pr
       position_level: input.positionLevel || "Staff",
       blood_type: input.bloodType || null,
       date_of_birth: input.dateOfBirth || null,
+      contract_end_date: input.contractEndDate || null,
+      resign_date: input.resignDate || null,
       location_id: input.locationId || null,
       shift_type_id: input.shiftTypeId || null,
       employment_status: input.employmentStatus,
       join_date: input.joinDate || null,
-      contract_end_date: input.contractEndDate || null,
-      resign_date: input.resignDate || null,
       npwp: input.npwp || null,
       ptkp_status: input.ptkpStatus,
       basic_salary: input.basicSalary || 0,
@@ -367,8 +367,6 @@ export async function updateEmployee(id: string, patch: Partial<Employee>): Prom
   if (patch.bpjsHealthNumber !== undefined) dbPatch.bpjs_health_number = patch.bpjsHealthNumber;
   if (patch.bpjsEmploymentNumber !== undefined)
     dbPatch.bpjs_employment_number = patch.bpjsEmploymentNumber;
-  if (patch.contractEndDate !== undefined) dbPatch.contract_end_date = patch.contractEndDate || null;
-  if (patch.resignDate !== undefined) dbPatch.resign_date = patch.resignDate || null;
   if (patch.fullName !== undefined) dbPatch.full_name = patch.fullName;
   if (patch.email !== undefined) dbPatch.email = patch.email;
   if (patch.phone !== undefined) dbPatch.phone = patch.phone;
@@ -378,6 +376,9 @@ export async function updateEmployee(id: string, patch: Partial<Employee>): Prom
   if (patch.positionLevel !== undefined) dbPatch.position_level = patch.positionLevel;
   if (patch.bloodType !== undefined) dbPatch.blood_type = patch.bloodType || null;
   if (patch.dateOfBirth !== undefined) dbPatch.date_of_birth = patch.dateOfBirth || null;
+  if (patch.contractEndDate !== undefined)
+    dbPatch.contract_end_date = patch.contractEndDate || null;
+  if (patch.resignDate !== undefined) dbPatch.resign_date = patch.resignDate || null;
   if (patch.locationId !== undefined) dbPatch.location_id = patch.locationId || null;
   if (patch.shiftTypeId !== undefined) dbPatch.shift_type_id = patch.shiftTypeId || null;
   if (patch.employmentStatus !== undefined) dbPatch.employment_status = patch.employmentStatus;
@@ -1291,8 +1292,12 @@ export function addPayroll(input: Omit<Payroll, "id" | "createdAt">): Payroll {
 }
 
 export function markPayrollPaid(id: string) {
+  setPayrollStatus(id, "PAID");
+}
+
+export function setPayrollStatus(id: string, status: PayrollStatus) {
   write(
     PAYROLL_KEY,
-    getPayrolls().map((p) => (p.id === id ? { ...p, paymentStatus: "PAID" as PayrollStatus } : p)),
+    getPayrolls().map((p) => (p.id === id ? { ...p, paymentStatus: status } : p)),
   );
 }

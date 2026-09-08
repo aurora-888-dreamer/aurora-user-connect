@@ -24,6 +24,8 @@ export const MODULE_MENUS: Record<PermissionModule, { key: string; label: string
   ],
   finance: [
     { key: "salary-view", label: "Data Gaji & Tunjangan Karyawan" },
+    { key: "kasbon", label: "Kasbon" },
+    { key: "compliance", label: "Compliance Checklist" },
     { key: "contacts", label: "Contact List" },
     { key: "chat", label: "Chat" },
   ],
