@@ -66,11 +66,11 @@ export const parseCvServerFn = createServerFn({ method: "POST" })
     const payload = await res.json();
     const raw: string = payload?.choices?.[0]?.message?.content ?? "";
     const jsonMatch = raw.match(/\{[\s\S]*\}/);
-    if (!jsonMatch) return { parsed: null as Record<string, unknown> | null };
+    if (!jsonMatch) return { parsedJson: null as string | null };
     try {
       const obj = JSON.parse(jsonMatch[0]);
-      return { parsed: obj?.error ? null : (obj as Record<string, unknown>) };
+      return { parsedJson: obj?.error ? null : (JSON.stringify(obj) as string | null) };
     } catch {
-      return { parsed: null as Record<string, unknown> | null };
+      return { parsedJson: null as string | null };
     }
   });
