@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ContactListSection } from "@/components/ContactListSection";
 import { ChatSection } from "@/components/ChatSection";
+import { CvMatchingSection } from "@/components/CvMatchingSection";
 import { getActiveSession, isTopAdmin, isDeveloperAdmin } from "@/lib/admin-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
@@ -103,6 +104,7 @@ function AtsPage() {
         <TabsList>
           {visible("vacancies") && <TabsTrigger value="vacancies">Job Board</TabsTrigger>}
           {visible("pipeline") && <TabsTrigger value="pipeline">Pipeline Kandidat</TabsTrigger>}
+          <TabsTrigger value="screening">AI CV Screening</TabsTrigger>
           {visible("contacts") && <TabsTrigger value="contacts">Contact List</TabsTrigger>}
           {visible("chat") && <TabsTrigger value="chat">Chat</TabsTrigger>}
         </TabsList>
@@ -118,6 +120,10 @@ function AtsPage() {
             <PipelineTab vacancies={vacancies} applicants={applicants} onChange={refresh} />
           </TabsContent>
         )}
+
+        <TabsContent value="screening" className="mt-6">
+          <CvMatchingSection />
+        </TabsContent>
 
         {visible("contacts") && (
           <TabsContent value="contacts" className="mt-6">
