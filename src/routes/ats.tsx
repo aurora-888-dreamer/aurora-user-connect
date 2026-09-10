@@ -3,6 +3,7 @@ import { useEffect, useState } from "react";
 import { AppShell } from "@/components/AppShell";
 import { ContactListSection } from "@/components/ContactListSection";
 import { ChatSection } from "@/components/ChatSection";
+import { CvMatchingSection } from "@/components/CvMatchingSection";
 import { getActiveSession, isTopAdmin, isDeveloperAdmin } from "@/lib/admin-auth";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
